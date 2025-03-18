@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+    <meta charset="UTF-8" />
+    <title>Živé obrázky – Hamster Village (Movement & No-Dup Fix)</title>
+    <style>
+        /* RESET & BASIC STYLING */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        html, body {
+            height: 100%;
+        }
+        body {
+            font-family: 'Comic Sans MS', 'Arial', sans-serif;
+            background: linear-gradient(to bottom, #41eafa, #89F8CE);
+            color: #4e342e;
+            overflow: hidden;
+        }
+
+        /* HEADER */
+        header {
+            background: linear-gradient(to bottom, #89F8CE, #41eafa);
+            color: #4e342e;
+            padding: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 4px solid #FFF4B5;
+            box-shadow: 0 3px 6px rgba(0,0,0,0.2);
+        }
+        header .button-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        header button {
+            background: #ffe0ec;
+            border: 2px solid #FFF4B5;
+            padding: 10px 16px;
+            border-radius: 14px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.2s ease-in-out;
+            box-shadow: 0 2px 3px rgba(0,0,0,0.1);
+        }
+        header button:hover {
+            background: #ffd1e3;
+            transform: translateY(-2px) scale(1.05);
+        }
+
+        /* SCENE CONTAINER */
+        #scene {
+            position: relative;
+            height: calc(100vh - 80px);
+            background: url('/hamster_village/hamstervillage.png') no-repeat center center;
+            background-size: cover;
+            margin: 0 auto;
+            overflow: hidden;
+            box-shadow: inset 0 0 10px rgba(0,0,0,0.2);
+        }
+
+        /* DRAGGABLE HAMSTER */
+        .draggable {
+            position: absolute;
+            width: 200px;
+            height: 200px;
+            background: url('/hamster_village/hamster.png') no-repeat center center;
+            background-size: contain;
+            cursor: move;
+            transition: transform 0.2s ease-in-out;
+        }
+        .draggable:hover {
+            transform: scale(1.1) rotate(0deg) !important;
+            z-index: 999;
+        }
+
+        /* BLOCK EDITOR (EDIT MODE) */
+        #block-editor {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 80vw;
+            max-width: 700px;
+            max-height: 80vh;
+            background: #fff4e5;
+            border: 4px solid #ff8f00;
+            border-radius: 14px;
+            padding: 20px;
+            overflow: auto;
+            z-index: 1000;
+            box-shadow: 0 6px 12px rgba(0,0,0,0.3);
+        }
+        #block-editor h2 {
+            color: #bf360c;
+            margin-bottom: 15px;
+            font-size: 1.4rem;
+            text-align: center;
+        }
+        .tip {
+            font-size: 0.9rem;
+            color: #777;
+            text-align: center;
+            margin-bottom: 10px;
+        }
+
+        /* BLOCK PALETTE */
+        #block-palette {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+            gap: 10px;
+            margin-bottom: 20px;
+            justify-items: center;
+        }
+
+        /* PROGRAM AREA */
+        #program-area {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0;
+            min-height: 200px;
+            padding: 10px;
+            border-radius: 8px;
+            background: #e1f5fe;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
+            position: relative;
+        }
+
+        /* BASIC BLOCK STYLE */
+        .block {
+            color: #fff;
+            font-size: 0.95rem;
+            font-weight: bold;
+            text-align: center;
+            cursor: grab;
+            transition: transform 0.2s ease;
+            box-shadow: 0 3px 6px rgba(0,0,0,0.2);
+            border-radius: 6px;
+            user-select: none;
+        }
+        .block:hover {
+            transform: scale(1.05);
+        }
+
+        /* SMALLER PALETTE BLOCKS */
+        #block-palette .block {
+            width: 110px;
+            padding: 8px;
+            margin: 0;
+        }
+
+        /* LARGER BLOCKS + pointer in PROGRAM AREA */
+        #program-area .block {
+            position: relative;
+            width: 220px;
+            padding: 14px;
+            margin: 12px 0;
+        }
+        #program-area .block::after {
+            content: "";
+            position: absolute;
+            left: 50%;
+            bottom: 0;
+            transform: translate(-50%, 100%);
+            width: 14px;
+            height: 8px;
+            background: inherit;
+            clip-path: polygon(0 0, 100% 0, 50% 100%);
+        }
+        #program-area .block + .block {
+            margin-top: -6px;
+        }
+
+        /* ORIGINAL COMMANDS */
+        .block-start {
+            background: #87CEEB;
+        }
+        .block-dopredu {
+            background: #FFB6C1;
+        }
+        .block-natoc {
+            background: #F0E68C;
+        }
+        .block-skoc {
+            background: #98FB98;
+        }
+        .block-cakaj {
+            background: #FFA07A;
+        }
+
+        /* ADDITIONAL COMMANDS */
+        .block-pri-kliknuti-na {
+            background: #fcb769;
+        }
+        .block-opakuj-stale {
+            background: #febe7f;
+        }
+        .block-dopredu-10 {
+            background: #78b5f9;
+        }
+        .block-ak-na-okraji {
+            background: #bfcfff;
+        }
+        .block-cakaj-1s {
+            background: #fa9494;
+        }
+
+        /* EXIT EDITOR BUTTON */
+        #exit-editor-btn {
+            display: inline-block;
+            margin-top: 15px;
+            padding: 10px 16px;
+            background: #ffe0ec;
+            border: 2px solid #ff8f00;
+            border-radius: 14px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: all 0.2s ease-in-out;
+            box-shadow: 0 2px 3px rgba(0,0,0,0.1);
+            float: right;
+        }
+        #exit-editor-btn:hover {
+            background: #ffd1e3;
+            transform: translateY(-2px) scale(1.05);
+        }
+
+        /* ZADANIE MODAL */
+        #zadanie-modal {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 80vw;
+            max-width: 650px;
+            max-height: 80vh;
+            background: #fff4e5;
+            border: 4px solid #ff8f00;
+            border-radius: 14px;
+            padding: 20px;
+            overflow: auto;
+            z-index: 1100;
+            box-shadow: 0 6px 12px rgba(0,0,0,0.3);
+        }
+        #zadanie-modal h2 {
+            color: #bf360c;
+            margin-bottom: 15px;
+            font-size: 1.4rem;
+            text-align: center;
+        }
+        #zadanie-content {
+            font-size: 1rem;
+            line-height: 1.4;
+            color: #5d4037;
+            margin-bottom: 15px;
+            white-space: pre-wrap;
+        }
+        #close-zadanie-btn {
+            display: inline-block;
+            margin-top: 5px;
+            padding: 10px 16px;
+            background: #ffe0ec;
+            border: 2px solid #ff8f00;
+            border-radius: 14px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: all 0.2s ease-in-out;
+            box-shadow: 0 2px 3px rgba(0,0,0,0.1);
+            float: right;
+        }
+        #close-zadanie-btn:hover {
+            background: #ffd1e3;
+            transform: translateY(-2px) scale(1.05);
+        }
+
+        /* HIGHLIGHT FOR REORDER DRAG */
+        .drag-over {
+            outline: 3px dashed #555;
+            border-radius: 8px;
+        }
+    </style>
+</head>
+<body>
+<header>
+    <div class="button-group">
+        <button id="create-program-btn">Programuj/Edituj</button>
+        <button id="run-program-btn">Spusti program</button>
+        <button id="stop-program-btn">Zastav program</button>
+        <button id="show-task-btn">Zobraz zadanie</button>
+        <button id="save-project-btn">Ulož projekt</button>
+    </div>
+    <div class="button-group">
+        <button id="toggle-mode-btn">Prepni režim: Hrací</button>
+    </div>
+</header>
+
+<main>
+    <div id="scene">
+        <div class="draggable" id="hamster" style="left: 50px; top: 100px;"></div>
+    </div>
+
+    <div id="block-editor">
+        <h2>Editačný mód – Tvorba programu</h2>
+        <div id="block-palette">
+            <!-- Original commands -->
+            <div class="block block-start" draggable="true" data-command="štart">Štart</div>
+            <div class="block block-dopredu" draggable="true" data-command="dopredu">Dopredu</div>
+            <div class="block block-natoc" draggable="true" data-command="natoč">Natoč</div>
+            <div class="block block-skoc" draggable="true" data-command="skoč">Skoč</div>
+            <div class="block block-cakaj" draggable="true" data-command="čakaj">Čakaj</div>
+
+            <!-- Additional commands -->
+            <div class="block block-pri-kliknuti-na" draggable="true" data-command="pri kliknutí na">
+                pri kliknutí na
+            </div>
+            <div class="block block-opakuj-stale" draggable="true" data-command="opakuj stále">
+                opakuj stále
+            </div>
+            <div class="block block-dopredu-10" draggable="true" data-command="dopredu 10">
+                dopredu 10
+            </div>
+            <div class="block block-ak-na-okraji" draggable="true" data-command="ak na okraji, odraz sa">
+                ak na okraji, odraz sa
+            </div>
+            <div class="block block-cakaj-1s" draggable="true" data-command="čakaj 1 s">
+                čakaj 1 s
+            </div>
+        </div>
+
+        <p class="tip">Dvojklik na príkaz v programovej oblasti ho okamžite odstráni</p>
+        <div id="program-area" ondragover="event.preventDefault()"></div>
+        <button id="exit-editor-btn">Kvačka – Ukonči editáciu</button>
+    </div>
+
+    <div id="zadanie-modal">
+        <h2>Zadanie</h2>
+        <div id="zadanie-content"></div>
+        <button id="close-zadanie-btn">Zatvoriť</button>
+    </div>
+</main>
+
+<script>
+    /* 1) Load Zadanie */
+    let zadanieText = 'Zadanie sa nepodarilo načítať.';
+    fetch('/hamster_village/zadanie.txt')
+        .then(r => {
+            if (!r.ok) throw new Error('Network response not OK');
+            return r.text();
+        })
+        .then(txt => { zadanieText = txt; })
+        .catch(err => console.error('Error loading zadanie.txt:', err));
+
+    /* 2) Toggle Edit Mode */
+    let isEditMode = false;
+    const toggleModeBtn = document.getElementById('toggle-mode-btn');
+    const blockEditor = document.getElementById('block-editor');
+    toggleModeBtn.addEventListener('click', () => {
+        isEditMode = !isEditMode;
+        blockEditor.style.display = isEditMode ? 'block' : 'none';
+        toggleModeBtn.textContent = isEditMode
+            ? 'Prepni režim: Editovací'
+            : 'Prepni režim: Hrací';
+    });
+
+    /* 3) Hamster Movement */
+    const hamster = document.getElementById('hamster');
+    let offsetX, offsetY, isDragging = false;
+    let hamsterX = 50, hamsterY = 100, hamsterAngle = 0;
+
+    hamster.addEventListener('mousedown', e => {
+        isDragging = true;
+        offsetX = e.offsetX;
+        offsetY = e.offsetY;
+    });
+    document.addEventListener('mousemove', e => {
+        if (isDragging) {
+            const rect = document.getElementById('scene').getBoundingClientRect();
+            let x = e.clientX - rect.left - offsetX;
+            let y = e.clientY - rect.top - offsetY;
+            x = Math.max(0, Math.min(x, rect.width - hamster.clientWidth));
+            y = Math.max(0, Math.min(y, rect.height - hamster.clientHeight));
+            hamster.style.left = x + 'px';
+            hamster.style.top = y + 'px';
+            hamsterX = x;
+            hamsterY = y;
+        }
+    });
+    document.addEventListener('mouseup', () => {
+        isDragging = false;
+    });
+
+    /* 4) Drag & Drop for Blocks */
+    const blocks = document.querySelectorAll('.block');
+    blocks.forEach(block => {
+        // Mark palette blocks
+        block.addEventListener('dragstart', e => {
+            e.dataTransfer.setData('fromPalette', 'true');
+            e.dataTransfer.setData('text/plain', e.target.dataset.command);
+            e.dataTransfer.setData('text/class', e.target.className);
+        });
+    });
+
+    const programArea = document.getElementById('program-area');
+    let draggingBlock = null;
+
+    programArea.addEventListener('drop', handleDropProgramArea);
+    programArea.addEventListener('dragover', e => e.preventDefault());
+
+    function handleDropProgramArea(e) {
+        e.preventDefault();
+        const fromPalette = e.dataTransfer.getData('fromPalette');
+        const command = e.dataTransfer.getData('text/plain');
+        const classes = e.dataTransfer.getData('text/class');
+
+        let newBlock;
+        if (fromPalette === 'true') {
+            newBlock = createProgramBlock(command, classes);
+        } else {
+            if (draggingBlock) {
+                newBlock = draggingBlock;
+                draggingBlock = null;
+            }
+        }
+        if (!newBlock) return;
+        const dropTarget = e.target;
+        if (dropTarget.classList.contains('block')) {
+            programArea.insertBefore(newBlock, dropTarget);
+        } else {
+            programArea.appendChild(newBlock);
+        }
+        removeAllDragOver();
+    }
+
+    function createProgramBlock(command, classes) {
+        const blk = document.createElement('div');
+        blk.textContent = command;
+        blk.className = classes;
+        blk.title = "Dvojklik odstráni príkaz";
+
+        // Make draggable for reorder
+        blk.draggable = true;
+        blk.addEventListener('dragstart', handleDragStartProgramBlock);
+        blk.addEventListener('dragend', handleDragEndProgramBlock);
+        blk.addEventListener('dragover', handleDragOverProgramBlock);
+        blk.addEventListener('drop', handleDropOnProgramBlock);
+
+        // Immediate double-click removal
+        blk.addEventListener('dblclick', () => blk.remove());
+
+        return blk;
+    }
+
+    function handleDragStartProgramBlock(e) {
+        e.dataTransfer.setData('fromPalette', 'false');
+        e.dataTransfer.setData('text/plain', e.target.textContent.trim());
+        e.dataTransfer.setData('text/class', e.target.className);
+        draggingBlock = e.target;
+        e.dataTransfer.setDragImage(e.target, 50, 10);
+    }
+    function handleDragEndProgramBlock() {
+        draggingBlock = null;
+        removeAllDragOver();
+    }
+    function handleDragOverProgramBlock(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.currentTarget.classList.add('drag-over');
+    }
+    function handleDropOnProgramBlock(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.currentTarget.classList.remove('drag-over');
+        handleDropProgramArea(e);
+    }
+    function removeAllDragOver() {
+        programArea.querySelectorAll('.block').forEach(b => b.classList.remove('drag-over'));
+    }
+
+    /* 5) Exit Editor */
+    document.getElementById('exit-editor-btn').addEventListener('click', () => {
+        blockEditor.style.display = 'none';
+        isEditMode = false;
+        toggleModeBtn.textContent = 'Prepni režim: Hrací';
+    });
+
+    /* 6) Button Handlers */
+    document.getElementById('create-program-btn').addEventListener('click', () => {
+        alert('Kliknite na objekt, ktorý chcete programovať (hamster).');
+    });
+    document.getElementById('run-program-btn').addEventListener('click', () => {
+        runProgram();
+    });
+    document.getElementById('stop-program-btn').addEventListener('click', () => {
+        alert('Program sa zastavuje...');
+        resetHamster();
+    });
+    const zadanieModal = document.getElementById('zadanie-modal');
+    const zadanieContent = document.getElementById('zadanie-content');
+    const closeZadanieBtn = document.getElementById('close-zadanie-btn');
+    document.getElementById('show-task-btn').addEventListener('click', () => {
+        zadanieContent.textContent = zadanieText;
+        zadanieModal.style.display = 'block';
+    });
+    closeZadanieBtn.addEventListener('click', () => {
+        zadanieModal.style.display = 'none';
+    });
+    document.getElementById('save-project-btn').addEventListener('click', () => {
+        alert('Projekt bol uložený (ukážka).');
+    });
+
+    /* 7) Running the Program */
+    function runProgram() {
+        const blockList = programArea.querySelectorAll('.block');
+        if (!blockList.length) {
+            alert('V programovej oblasti nie sú žiadne príkazy!');
+            return;
+        }
+        let chain = Promise.resolve();
+        blockList.forEach(block => {
+            const cmd = block.textContent.trim().toLowerCase();
+            chain = chain.then(() => interpretCommand(cmd));
+        });
+        chain.catch(err => console.error('Chyba v programe:', err));
+    }
+
+    /* 8) Interpret and Execute Commands */
+    function interpretCommand(cmd) {
+        switch(cmd) {
+            case 'štart':
+                console.log("Štart: resetting hamster");
+                hamsterAngle = 0;
+                hamsterX = 50;
+                hamsterY = 100;
+                moveHamster();
+                return wait(300);
+
+            case 'dopredu':
+                console.log("Dopredu: move forward 20px");
+                moveForward(20);
+                return wait(300);
+
+            case 'natoč':
+                console.log("Natoč: turn 90°");
+                hamsterAngle += 90;
+                moveHamster();
+                return wait(300);
+
+            case 'skoč':
+                console.log("Skoč: jump");
+                return jumpAnimation();
+
+            case 'čakaj':
+                console.log("Čakaj: wait 1 second");
+                return wait(1000);
+
+            case 'pri kliknutí na':
+                console.log("Pri kliknutí na: waiting for hamster click");
+                return waitForClick();
+
+            case 'opakuj stále':
+                console.log("Opakuj stále: repeating next command (placeholder)");
+                // Placeholder: in a full implementation, nested commands would be repeated.
+                return wait(300);
+
+            case 'dopredu 10':
+                console.log("Dopredu 10: move forward 10px");
+                moveForward(10);
+                return wait(300);
+
+            case 'ak na okraji, odraz sa':
+                console.log("Ak na okraji, odraz sa: checking edge");
+                if (isAtEdge()) {
+                    hamsterAngle += 180;
+                    moveHamster();
+                }
+                return wait(300);
+
+            case 'čakaj 1 s':
+                console.log("Čakaj 1 s: wait 1 second");
+                return wait(1000);
+
+            default:
+                console.log("Unknown command: " + cmd);
+                return Promise.resolve();
+        }
+    }
+
+    /* 9) Movement Helpers */
+    function moveForward(px) {
+        const rad = hamsterAngle * (Math.PI / 180);
+        hamsterX += px * Math.cos(rad);
+        hamsterY += px * Math.sin(rad);
+        moveHamster();
+    }
+    function moveHamster() {
+        const rect = document.getElementById('scene').getBoundingClientRect();
+        const hamsterEl = document.getElementById('hamster');
+        const maxX = rect.width - hamsterEl.clientWidth;
+        const maxY = rect.height - hamsterEl.clientHeight;
+        hamsterX = Math.max(0, Math.min(hamsterX, maxX));
+        hamsterY = Math.max(0, Math.min(hamsterY, maxY));
+        hamsterEl.style.left = hamsterX + 'px';
+        hamsterEl.style.top = hamsterY + 'px';
+        hamsterEl.style.transform = `rotate(${hamsterAngle}deg)`;
+    }
+    function isAtEdge() {
+        const rect = document.getElementById('scene').getBoundingClientRect();
+        const hamsterEl = document.getElementById('hamster');
+        const maxX = rect.width - hamsterEl.clientWidth;
+        const maxY = rect.height - hamsterEl.clientHeight;
+        return (hamsterX <= 0 || hamsterX >= maxX || hamsterY <= 0 || hamsterY >= maxY);
+    }
+    function jumpAnimation() {
+        return new Promise(resolve => {
+            const originalTop = hamsterY;
+            const jumpHeight = 40;
+            hamsterY -= jumpHeight;
+            moveHamster();
+            setTimeout(() => {
+                hamsterY = originalTop;
+                moveHamster();
+                setTimeout(resolve, 200);
+            }, 200);
+        });
+    }
+    function wait(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    /* 10) Stop Program = Reset Hamster */
+    function resetHamster() {
+        hamsterAngle = 0;
+        hamsterX = 50;
+        hamsterY = 100;
+        moveHamster();
+    }
+
+    /* NEW HELPER: Wait for click on hamster */
+    function waitForClick() {
+        return new Promise(resolve => {
+            const hamsterEl = document.getElementById('hamster');
+            function onClick() {
+                hamsterEl.removeEventListener('click', onClick);
+                resolve();
+            }
+            hamsterEl.addEventListener('click', onClick);
+        });
+    }
+</script>
+</body>
+</html>
