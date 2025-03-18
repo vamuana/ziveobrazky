@@ -55,7 +55,7 @@
         #scene {
             position: relative;
             height: calc(100vh - 80px);
-            background: url('/hamster_village/hamstervillage.png') no-repeat center center;
+            background: url('./hamster_village/hamstervillage.png') no-repeat center center;
             background-size: cover;
             margin: 0 auto;
             overflow: hidden;
@@ -67,7 +67,7 @@
             position: absolute;
             width: 200px;
             height: 200px;
-            background: url('/hamster_village/hamster.png') no-repeat center center;
+            background: url('./hamster_village/hamster.png') no-repeat center center;
             background-size: contain;
             cursor: move;
             transition: transform 0.2s ease-in-out;
@@ -347,7 +347,7 @@
 <script>
     /* 1) Load Zadanie */
     let zadanieText = 'Zadanie sa nepodarilo načítať.';
-    fetch('/hamster_village/zadanie.txt')
+    fetch('./hamster_village/zadanie.txt')
         .then(r => {
             if (!r.ok) throw new Error('Network response not OK');
             return r.text();
