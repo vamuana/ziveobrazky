@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+    <meta charset="UTF-8" />
+    <title>Živé obrázky – Učiteľ</title>
+    <style>
+        /* RESET & BASIC STYLING */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        html, body {
+            height: 100%;
+        }
+        body {
+            font-family: 'Comic Sans MS', 'Arial', sans-serif;
+            background: linear-gradient(to bottom, #41eafa, #89F8CE);
+            color: #4e342e;
+            overflow: hidden;
+        }
+
+        /* HEADER */
+        header {
+            background: linear-gradient(to bottom, #89F8CE, #41eafa);
+            color: #4e342e;
+            padding: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 4px solid #FFF4B5;
+            box-shadow: 0 3px 6px rgba(0,0,0,0.2);
+        }
+        header .button-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        header button {
+            background: #ffe0ec;
+            border: 2px solid #FFF4B5;
+            padding: 10px 16px;
+            border-radius: 14px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.2s ease-in-out;
+            box-shadow: 0 2px 3px rgba(0,0,0,0.1);
+        }
+        header button:hover {
+            background: #ffd1e3;
+            transform: translateY(-2px) scale(1.05);
+        }
+
+        /* SCENE CONTAINER */
+        #scene {
+            position: relative;
+            height: calc(100vh - 80px);
+            background: url('default_background.png') no-repeat center center;
+            background-size: cover;
+            margin: 0 auto;
+            overflow: hidden;
+            box-shadow: inset 0 0 10px rgba(0,0,0,0.2);
+        }
+        .object {
+            position: absolute;
+            width: 100px;
+            height: 100px;
+            cursor: grab;
+        }
+    </style>
+</head>
+<body>
+<header>
+    <div class="button-group">
+        <input type="file" id="upload-task" style="display: none;" accept=".json" />
+        <button id="load-task">Načítaj úlohu</button>
+        <input type="file" id="upload-background" style="display: none;" accept="image/*" />
+        <button id="load-background">Načítaj pozadie</button>
+        <input type="file" id="upload-object" style="display: none;" accept="image/*" />
+        <button id="add-object">Vlož objekt</button>
+        <button id="copy-object">Vlož kópiu objektu</button>
+        <button id="delete-object">Zruš objekt</button>
+    </div>
+    <div class="button-group">
+        <button id="configure-program">Programuj</button>
+        <button id="save-project">Zapíš projekt</button>
+    </div>
+</header>
+<main>
+    <div id="scene"></div>
+</main>
+<script>
+    document.getElementById('load-task').addEventListener('click', function() {
+        document.getElementById('upload-task').click();
+    });
+
+    document.getElementById('upload-task').addEventListener('change', function(event) {
+        const file = event.target.files[0];
+        if (file) {
+            alert(`Načítanie úlohy: ${file.name}`);
+        }
+    });
+
+    document.getElementById('load-background').addEventListener('click', function() {
+        document.getElementById('upload-background').click();
+    });
+
+    document.getElementById('upload-background').addEventListener('change', function(event) {
+        const file = event.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                document.getElementById('scene').style.backgroundImage = `url('${e.target.result}')`;
+            };
+            reader.readAsDataURL(file);
+        }
+    });
+
+    document.getElementById('add-object').addEventListener('click', function() {
+        document.getElementById('upload-object').click();
+    });
+
+    document.getElementById('upload-object').addEventListener('change', function(event) {
+        const file = event.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const img = document.createElement('img');
+                img.src = e.target.result;
+                img.classList.add('object');
+                img.style.left = '50px';
+                img.style.top = '50px';
+                img.draggable = true;
+                img.addEventListener('mousedown', startDrag);
+                document.getElementById('scene').appendChild(img);
+            };
+            reader.readAsDataURL(file);
+        }
+    });
+
+    function startDrag(event) {
+        const obj = event.target;
+        let offsetX = event.clientX - obj.offsetLeft;
+        let offsetY = event.clientY - obj.offsetTop;
+
+        function move(event) {
+            obj.style.left = event.clientX - offsetX + 'px';
+            obj.style.top = event.clientY - offsetY + 'px';
+        }
+
+        function stopDrag() {
+            document.removeEventListener('mousemove', move);
+            document.removeEventListener('mouseup', stopDrag);
+        }
+
+        document.addEventListener('mousemove', move);
+        document.addEventListener('mouseup', stopDrag);
+    }
+</script>
+</body>
+</html>
