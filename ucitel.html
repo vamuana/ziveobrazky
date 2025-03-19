@@ -90,6 +90,8 @@
     <div id="scene"></div>
 </main>
 <script>
+    let selectedObject = null;
+
     document.getElementById('load-task').addEventListener('click', function() {
         document.getElementById('upload-task').click();
     });
@@ -125,16 +127,32 @@
         if (file) {
             const reader = new FileReader();
             reader.onload = function(e) {
-                const img = document.createElement('img');
-                img.src = e.target.result;
-                img.classList.add('object');
-                img.style.left = '50px';
-                img.style.top = '50px';
-                img.draggable = true;
-                img.addEventListener('mousedown', startDrag);
-                document.getElementById('scene').appendChild(img);
+                createObject(e.target.result, 50, 50);
             };
             reader.readAsDataURL(file);
+        }
+    });
+
+    function createObject(src, x, y) {
+        const img = document.createElement('img');
+        img.src = src;
+        img.classList.add('object');
+        img.style.left = x + 'px';
+        img.style.top = y + 'px';
+        img.draggable = true;
+        img.addEventListener('mousedown', startDrag);
+        img.addEventListener('click', function() {
+            selectedObject = this;
+        });
+        document.getElementById('scene').appendChild(img);
+    }
+
+    document.getElementById('copy-object').addEventListener('click', function() {
+        if (selectedObject) {
+            const rect = selectedObject.getBoundingClientRect();
+            createObject(selectedObject.src, rect.left + 20, rect.top + 20);
+        } else {
+            alert('Kliknite na objekt, ktorý chcete skopírovať.');
         }
     });
 
