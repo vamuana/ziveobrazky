@@ -2,7 +2,7 @@
 <html lang="sk">
 <head>
     <meta charset="UTF-8" />
-    <title>Živé obrázky – Učiteľ</title>
+    <title>Živé obrázky – Editor úlohy</title>
     <style>
         /* RESET & BASIC STYLING */
         * {
@@ -14,16 +14,14 @@
             height: 100%;
         }
         body {
-            font-family: 'Comic Sans MS', 'Arial', sans-serif;
+            font-family: 'Comic Sans MS', Arial, sans-serif;
             background: linear-gradient(to bottom, #41eafa, #89F8CE);
             color: #4e342e;
             overflow: hidden;
         }
-
         /* HEADER */
         header {
             background: linear-gradient(to bottom, #89F8CE, #41eafa);
-            color: #4e342e;
             padding: 12px;
             display: flex;
             justify-content: space-between;
@@ -33,8 +31,8 @@
         }
         header .button-group {
             display: flex;
-            align-items: center;
             gap: 10px;
+            align-items: center;
         }
         header button {
             background: #ffe0ec;
@@ -50,13 +48,11 @@
             background: #ffd1e3;
             transform: translateY(-2px) scale(1.05);
         }
-
         /* SCENE CONTAINER */
         #scene {
             position: relative;
             height: calc(100vh - 80px);
-            background: url('default_background.png') no-repeat center center;
-            background-size: cover;
+            background: #d0eaff;
             margin: 0 auto;
             overflow: hidden;
             box-shadow: inset 0 0 10px rgba(0,0,0,0.2);
@@ -67,113 +63,234 @@
             height: 100px;
             cursor: grab;
         }
+        .selected {
+            outline: 2px solid red;
+        }
     </style>
 </head>
 <body>
 <header>
     <div class="button-group">
-        <input type="file" id="upload-task" style="display: none;" accept=".json" />
-        <button id="load-task">Načítaj úlohu</button>
-        <input type="file" id="upload-background" style="display: none;" accept="image/*" />
-        <button id="load-background">Načítaj pozadie</button>
-        <input type="file" id="upload-object" style="display: none;" accept="image/*" />
-        <button id="add-object">Vlož objekt</button>
-        <button id="copy-object">Vlož kópiu objektu</button>
-        <button id="delete-object">Zruš objekt</button>
+        <!-- Background & Object Controls -->
+        <input type="file" id="backgroundUpload" style="display: none;" accept="image/*" />
+        <button id="loadBackground">Načítaj pozadie</button>
+        <input type="file" id="objectUpload" style="display: none;" accept="image/*" />
+        <button id="addObject">Vlož objekt</button>
+        <button id="copyObject">Vlož kópiu objektu</button>
+        <button id="deleteObject">Zruš objekt</button>
     </div>
     <div class="button-group">
-        <button id="configure-program">Programuj</button>
-        <button id="save-project">Zapíš projekt</button>
+        <!-- Editing & Saving -->
+        <button id="configureProgram">Programuj</button>
+        <button id="editText">Vlož text</button>
+        <button id="saveProject">Zapíš projekt</button>
     </div>
 </header>
 <main>
     <div id="scene"></div>
 </main>
 <script>
-    let selectedObject = null;
+    // --------------------- Project Model ---------------------
+    // Load project from localStorage or create a new default project.
+    let project = JSON.parse(localStorage.getItem("currentProject")) || {
+        assignmentTitle: "Nová úloha",
+        assignmentDescription: "Zadaj sem popis úlohy.",
+        background: "",
+        objects: [] // Each object: { id, image, x, y, rotation, scale, blocks: [] }
+    };
 
-    document.getElementById('load-task').addEventListener('click', function() {
-        document.getElementById('upload-task').click();
-    });
-
-    document.getElementById('upload-task').addEventListener('change', function(event) {
-        const file = event.target.files[0];
-        if (file) {
-            alert(`Načítanie úlohy: ${file.name}`);
-        }
-    });
-
-    document.getElementById('load-background').addEventListener('click', function() {
-        document.getElementById('upload-background').click();
-    });
-
-    document.getElementById('upload-background').addEventListener('change', function(event) {
-        const file = event.target.files[0];
-        if (file) {
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                document.getElementById('scene').style.backgroundImage = `url('${e.target.result}')`;
-            };
-            reader.readAsDataURL(file);
-        }
-    });
-
-    document.getElementById('add-object').addEventListener('click', function() {
-        document.getElementById('upload-object').click();
-    });
-
-    document.getElementById('upload-object').addEventListener('change', function(event) {
-        const file = event.target.files[0];
-        if (file) {
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                createObject(e.target.result, 50, 50);
-            };
-            reader.readAsDataURL(file);
-        }
-    });
-
-    function createObject(src, x, y) {
-        const img = document.createElement('img');
-        img.src = src;
-        img.classList.add('object');
-        img.style.left = x + 'px';
-        img.style.top = y + 'px';
-        img.draggable = true;
-        img.addEventListener('mousedown', startDrag);
-        img.addEventListener('click', function() {
-            selectedObject = this;
-        });
-        document.getElementById('scene').appendChild(img);
+    // Save the project JSON to localStorage.
+    function saveProject() {
+        localStorage.setItem("currentProject", JSON.stringify(project));
     }
 
-    document.getElementById('copy-object').addEventListener('click', function() {
-        if (selectedObject) {
-            const rect = selectedObject.getBoundingClientRect();
-            createObject(selectedObject.src, rect.left + 20, rect.top + 20);
+    // --------------------- Scene Rendering ---------------------
+    function renderScene() {
+        const scene = document.getElementById('scene');
+        scene.innerHTML = "";
+        if (project.background) {
+            scene.style.backgroundImage = `url('${project.background}')`;
+            scene.style.backgroundSize = 'cover';
         } else {
-            alert('Kliknite na objekt, ktorý chcete skopírovať.');
+            scene.style.backgroundImage = "";
         }
-    });
+        project.objects.forEach(obj => {
+            const img = document.createElement('img');
+            img.src = obj.image;
+            img.className = 'object';
+            img.style.left = obj.x + 'px';
+            img.style.top = obj.y + 'px';
+            img.style.transform = `rotate(${obj.rotation}deg) scale(${obj.scale})`;
+            img.dataset.id = obj.id;
+            // Enable dragging and selection.
+            img.addEventListener('mousedown', startDrag);
+            img.addEventListener('click', (e) => {
+                e.stopPropagation();
+                selectObject(obj.id);
+            });
+            scene.appendChild(img);
+        });
+    }
 
-    function startDrag(event) {
-        const obj = event.target;
-        let offsetX = event.clientX - obj.offsetLeft;
-        let offsetY = event.clientY - obj.offsetTop;
-
-        function move(event) {
-            obj.style.left = event.clientX - offsetX + 'px';
-            obj.style.top = event.clientY - offsetY + 'px';
-        }
-
-        function stopDrag() {
-            document.removeEventListener('mousemove', move);
-            document.removeEventListener('mouseup', stopDrag);
-        }
-
-        document.addEventListener('mousemove', move);
+    // --------------------- Object Selection and Dragging ---------------------
+    let selectedObjectId = null;
+    function selectObject(id) {
+        selectedObjectId = id;
+        document.querySelectorAll('.object').forEach(el => el.classList.remove('selected'));
+        const selEl = document.querySelector(`img.object[data-id="${id}"]`);
+        if (selEl) selEl.classList.add('selected');
+    }
+    let dragOffsetX, dragOffsetY;
+    function startDrag(e) {
+        const objEl = e.target;
+        selectedObjectId = objEl.dataset.id;
+        dragOffsetX = e.offsetX;
+        dragOffsetY = e.offsetY;
+        document.addEventListener('mousemove', dragObject);
         document.addEventListener('mouseup', stopDrag);
     }
+    function dragObject(e) {
+        const sceneRect = document.getElementById('scene').getBoundingClientRect();
+        let x = e.clientX - sceneRect.left - dragOffsetX;
+        let y = e.clientY - sceneRect.top - dragOffsetY;
+        const objEl = document.querySelector(`img.object[data-id="${selectedObjectId}"]`);
+        if (objEl) {
+            objEl.style.left = x + 'px';
+            objEl.style.top = y + 'px';
+        }
+        project.objects = project.objects.map(obj => {
+            if (obj.id === selectedObjectId) {
+                obj.x = x;
+                obj.y = y;
+            }
+            return obj;
+        });
+    }
+    function stopDrag(e) {
+        document.removeEventListener('mousemove', dragObject);
+        document.removeEventListener('mouseup', stopDrag);
+        saveProject();
+    }
+
+    // --------------------- Button Handlers ---------------------
+    // 1. Load Background Image
+    document.getElementById('loadBackground').addEventListener('click', () => {
+        document.getElementById('backgroundUpload').click();
+    });
+    document.getElementById('backgroundUpload').addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+                project.background = evt.target.result;
+                saveProject();
+                renderScene();
+            };
+            reader.readAsDataURL(file);
+        }
+    });
+
+    // 2. Add New Object
+    document.getElementById('addObject').addEventListener('click', () => {
+        document.getElementById('objectUpload').click();
+    });
+    document.getElementById('objectUpload').addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+                const newObj = {
+                    id: Date.now().toString(),
+                    image: evt.target.result,
+                    x: 50,
+                    y: 50,
+                    rotation: 0,
+                    scale: 1,
+                    blocks: []
+                };
+                project.objects.push(newObj);
+                saveProject();
+                renderScene();
+            };
+            reader.readAsDataURL(file);
+        }
+    });
+
+    // 3. Copy Selected Object
+    document.getElementById('copyObject').addEventListener('click', () => {
+        if (!selectedObjectId) {
+            alert("Vyberte objekt na kopírovanie.");
+            return;
+        }
+        const orig = project.objects.find(obj => obj.id === selectedObjectId);
+        if (orig) {
+            const copy = { ...orig, id: Date.now().toString(), x: orig.x + 20, y: orig.y + 20 };
+            project.objects.push(copy);
+            saveProject();
+            renderScene();
+        }
+    });
+
+    // 4. Delete Selected Object
+    document.getElementById('deleteObject').addEventListener('click', () => {
+        if (!selectedObjectId) {
+            alert("Vyberte objekt na zrušenie.");
+            return;
+        }
+        if (confirm("Naozaj chcete zrušiť tento objekt?")) {
+            project.objects = project.objects.filter(obj => obj.id !== selectedObjectId);
+            selectedObjectId = null;
+            saveProject();
+            renderScene();
+        }
+    });
+
+    // 5. Block Editor for Selected Object ("Programuj")
+    document.getElementById('configureProgram').addEventListener('click', () => {
+        if (!selectedObjectId) {
+            alert("Vyberte objekt, ktorý chcete programovať.");
+            return;
+        }
+        // Get current blocks (if any) as a comma-separated string.
+        const obj = project.objects.find(o => o.id === selectedObjectId);
+        const currentBlocks = obj.blocks.join(", ");
+        let input = prompt("Zadajte bloky oddelené čiarkou (napr. štart, dopredu, čakaj):", currentBlocks);
+        if (input !== null) {
+            // Split input by commas and trim spaces.
+            obj.blocks = input.split(",").map(s => s.trim()).filter(s => s !== "");
+            saveProject();
+            alert("Bloky boli aktualizované:\n" + obj.blocks.join(", "));
+        }
+    });
+
+    // 6. Text Editor for Assignment ("Vlož text")
+    document.getElementById('editText').addEventListener('click', () => {
+        // Use prompt to update the assignment title and description.
+        let newTitle = prompt("Zadajte názov úlohy:", project.assignmentTitle);
+        if (newTitle !== null) {
+            project.assignmentTitle = newTitle.trim() || project.assignmentTitle;
+        }
+        let newDesc = prompt("Zadajte popis úlohy:", project.assignmentDescription);
+        if (newDesc !== null) {
+            project.assignmentDescription = newDesc.trim() || project.assignmentDescription;
+        }
+        saveProject();
+        alert("Údaje o úlohe boli aktualizované.");
+    });
+
+    // 7. Save (Export) Project as JSON
+    document.getElementById('saveProject').addEventListener('click', () => {
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(project, null, 2));
+        const a = document.createElement('a');
+        a.setAttribute("href", dataStr);
+        a.setAttribute("download", project.assignmentTitle + ".json");
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+    });
+
+    // --------------------- Initialization ---------------------
+    renderScene();
 </script>
 </body>
 </html>

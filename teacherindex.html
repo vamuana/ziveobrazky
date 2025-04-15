@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+    <meta charset="UTF-8" />
+    <title>Živé obrázky – Správa projektov</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        html, body {
+            height: 100%;
+            font-family: 'Comic Sans MS', Arial, sans-serif;
+        }
+        body {
+            background: linear-gradient(to bottom, #41eafa, #89F8CE);
+            color: #4e342e;
+            overflow: hidden;
+        }
+        header {
+            background: linear-gradient(to bottom, #89F8CE, #41eafa);
+            color: #4e342e;
+            padding: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 4px solid #FFF4B5;
+            box-shadow: 0 3px 6px rgba(0,0,0,0.2);
+        }
+        header h1 {
+            font-size: 2.5rem;
+        }
+        .container {
+            padding: 20px;
+            overflow-y: auto;
+            height: calc(100vh - 80px);
+        }
+        .upload-btn {
+            display: inline-block;
+            margin: 10px 10px 20px 0;
+            padding: 10px 20px;
+            font-size: 1.2rem;
+            background-color: #ffe0ec;
+            color: #4e342e;
+            border: 2px solid #FFF4B5;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background 0.3s ease;
+        }
+        .upload-btn:hover {
+            background-color: #ffd1e3;
+        }
+        #folder-upload, #json-upload {
+            display: none;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+        }
+        .card {
+            background: #fff;
+            border: 2px solid #FFF4B5;
+            border-radius: 10px;
+            box-shadow: 0 3px 6px rgba(0,0,0,0.2);
+            overflow: hidden;
+            text-align: center;
+            transition: transform 0.2s ease;
+            cursor: pointer;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            justify-content: start;
+            width: 100%;
+            aspect-ratio: 1 / 1;
+        }
+        .card:hover {
+            transform: scale(1.03);
+        }
+        .card img {
+            width: 100%;
+            height: 70%;
+            object-fit: cover;
+            display: block;
+        }
+        .card .card-title {
+            padding: 10px;
+            font-size: 1.2rem;
+            color: #4e342e;
+            flex-grow: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+        }
+        .remove-btn {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            background: rgba(255, 224, 236, 0.9);
+            border: none;
+            border-radius: 4px;
+            padding: 4px 8px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            color: #4e342e;
+            transition: background 0.2s ease;
+        }
+        .remove-btn:hover {
+            background: #ffd1e3;
+        }
+    </style>
+</head>
+<body>
+<header>
+    <h1>Správa projektov</h1>
+</header>
+<div class="container">
+    <button class="upload-btn" id="createEmptyBtn">➕ Nový projekt</button>
+    <button class="upload-btn" id="uploadJsonBtn">⬆️ Nahrať projekt (.json)</button>
+    <input type="file" id="json-upload" accept="application/json">
+    <div class="grid" id="gameGrid"></div>
+</div>
+
+<script>
+    // ---------------- LOAD PROJECT IF LINKED ----------------
+    const urlParams = new URLSearchParams(window.location.search);
+    const projectFile = urlParams.get('project');
+
+    if (projectFile) {
+        fetch(projectFile)
+            .then(res => res.json())
+            .then(data => {
+                localStorage.setItem("currentProject", JSON.stringify(data));
+                window.location.href = "ucitel.html"; // redirect without param
+            })
+            .catch(err => {
+                alert("Nepodarilo sa načítať projekt.");
+                console.error(err);
+            });
+    }
+
+    const defaultGames = [
+        {
+            title: 'Skrečkoland',
+            task: 'Zaveď škrečka Tušíka k domčeku.',
+            thumbnail: 'hamster_village/hamstervillage.png',
+            projectFile: 'hamster_village/defaultProject.json'
+        },
+        {
+            title: 'Podvodný svet',
+            task: 'Popis hry 2',
+            thumbnail: 'underwater/underwater.png',
+            projectFile: 'underwater/project1.json'
+        },
+        {
+            title: 'Nebeské dobrodružstvo',
+            task: 'Popis hry 3',
+            thumbnail: 'sky/sky.png',
+            projectFile: 'sky/project1.json'
+        }
+    ];
+
+    const uploadsKey = 'teacherUploads';
+
+    function loadUploadedGames() {
+        return JSON.parse(localStorage.getItem(uploadsKey)) || [];
+    }
+
+    function saveUploadedGames(games) {
+        localStorage.setItem(uploadsKey, JSON.stringify(games));
+    }
+
+    function getCombinedGames() {
+        return defaultGames.concat(loadUploadedGames());
+    }
+
+    function loadGames() {
+        const gameGrid = document.getElementById('gameGrid');
+        gameGrid.innerHTML = "";
+        const games = getCombinedGames();
+
+        games.forEach((game, index) => {
+            const card = document.createElement('div');
+            card.className = 'card';
+
+            const img = document.createElement('img');
+            img.src = game.thumbnail;
+            img.alt = game.title;
+            card.appendChild(img);
+
+            const titleDiv = document.createElement('div');
+            titleDiv.className = 'card-title';
+            titleDiv.textContent = game.title;
+            card.appendChild(titleDiv);
+
+            if (index >= defaultGames.length) {
+                const removeBtn = document.createElement('button');
+                removeBtn.className = 'remove-btn';
+                removeBtn.textContent = 'Remove';
+                removeBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const uploadedGames = loadUploadedGames();
+                    uploadedGames.splice(index - defaultGames.length, 1);
+                    saveUploadedGames(uploadedGames);
+                    loadGames();
+                });
+                card.appendChild(removeBtn);
+            }
+
+            card.addEventListener('click', () => {
+                if (game.projectFile) {
+                    window.location.href = `ucitel.html?project=${encodeURIComponent(game.projectFile)}`;
+                } else {
+                    const project = {
+                        assignmentTitle: game.title,
+                        assignmentDescription: game.task,
+                        background: game.thumbnail,
+                        objects: []
+                    };
+                    localStorage.setItem("currentProject", JSON.stringify(project));
+                    window.location.href = 'ucitel.html';
+                }
+            });
+
+            gameGrid.appendChild(card);
+        });
+    }
+
+    document.getElementById('createEmptyBtn').addEventListener('click', () => {
+        const newProject = {
+            assignmentTitle: "Nový projekt",
+            assignmentDescription: "Popis zadania",
+            background: "",
+            objects: []
+        };
+        localStorage.setItem("currentProject", JSON.stringify(newProject));
+        window.location.href = 'ucitel.html';
+    });
+
+    document.getElementById('uploadJsonBtn').addEventListener('click', () => {
+        document.getElementById('json-upload').click();
+    });
+
+    document.getElementById('json-upload').addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = function(evt) {
+            try {
+                const json = JSON.parse(evt.target.result);
+                localStorage.setItem("currentProject", JSON.stringify(json));
+                window.location.href = 'ucitel.html';
+            } catch (err) {
+                alert("Neplatný JSON súbor.");
+                console.error(err);
+            }
+        };
+        reader.readAsText(file);
+    });
+
+    loadGames();
+</script>
+</body>
+</html>

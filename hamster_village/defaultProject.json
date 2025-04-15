@@ -1,0 +1,16 @@
+{
+  "assignmentTitle": "Škrečkoland",
+  "assignmentDescription": "Zaveď škrečka Tušíka k domčeku.",
+  "background": "hamster_village/hamstervillage.png",
+  "objects": [
+    {
+      "id": "hamster",
+      "image": "hamster_village/hamster.png",
+      "x": 300,
+      "y": 200,
+      "rotation": 0,
+      "scale": 1,
+      "blocks": []
+    }
+  ]
+}

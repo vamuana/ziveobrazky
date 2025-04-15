@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+    <meta charset="UTF-8" />
+    <title>Živé obrázky – Coverflow Slider</title>
+    <style>
+        /* FULL-PAGE BACKGROUND */
+        html, body {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            font-family: 'Comic Sans MS', Arial, sans-serif;
+            background: url('./introbg.png') no-repeat center center fixed;
+            background-size: cover;
+            color: #4e342e;
+            overflow: hidden;
+        }
+
+        .intro-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding-top: 8vh;
+            text-align: center;
+            min-height: 100vh;
+            background-color: rgba(255, 255, 255, 0.2);
+        }
+
+        h1 {
+            font-size: 4.2rem;
+            color: #fff;
+            margin-bottom: -1px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        }
+
+        .slider-container {
+            position: relative;
+            width: 800px;
+            height: 350px;
+            perspective: 1000px;
+            overflow: hidden;
+            margin-bottom: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .slides {
+            position: relative;
+            width: 100%;
+            height: 100%;
+        }
+
+        .slide {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform-style: preserve-3d;
+            transform: translate(-50%, -50%);
+            transition: transform 0.6s ease, opacity 0.6s ease;
+            width: 280px;
+            height: 280px;
+            border-radius: 14px;
+            box-shadow: 0 3px 6px rgba(0,0,0,0.2);
+            background: #fff;
+            text-align: center;
+            overflow: hidden;
+            cursor: pointer;
+        }
+        .slide:hover {
+            box-shadow: 0 6px 10px rgba(0,0,0,0.3);
+        }
+
+        .slide .thumbnail {
+            width: 100%;
+            height: 180px;
+        }
+
+        .arrow-btn {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 50px;
+            height: 50px;
+            border: none;
+            border-radius: 25px;
+            background: #B2A5FF;
+            cursor: pointer;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+            font-size: 1.5rem;
+            color: #333;
+            transition: background 0.2s;
+            z-index: 10;
+        }
+        .arrow-btn:hover {
+            background: #eee;
+        }
+        .arrow-left {
+            left: 10px;
+        }
+        .arrow-right {
+            right: 10px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="intro-container">
+    <h1>Živé obrázky</h1>
+
+    <div class="slider-container">
+        <button class="arrow-btn arrow-left" onclick="prevSlide()">&lt;</button>
+        <div class="slides" id="slides">
+            <div class="slide" onclick="location.href='ziak.html';">
+                <div class="thumbnail" style="background: url('./hamster_village/hamstervillage.png') center/cover no-repeat;"></div>
+                <h2>Škrečkoland</h2>
+                <p>Kliknite pre spustenie hry</p>
+            </div>
+            <div class="slide" onclick="location.href='ziak.html';">
+                <div class="thumbnail" style="background: url('./underwater/underwater.png') center/cover no-repeat;"></div>
+                <h2>Podvodný svet</h2>
+                <p>Popis hry 2</p>
+            </div>
+            <div class="slide" onclick="location.href='ziak.html';">
+                <div class="thumbnail" style="background: url('./sky/sky.png') center/cover no-repeat;"></div>
+                <h2>Nebeské dobrodružstvo</h2>
+                <p>Popis hry 3</p>
+            </div>
+        </div>
+        <button class="arrow-btn arrow-right" onclick="nextSlide()">&gt;</button>
+    </div>
+</div>
+
+<script>
+    const slides = document.querySelectorAll('.slide');
+    let currentIndex = 0;
+
+    positionSlides();
+
+    function nextSlide() {
+        currentIndex = (currentIndex + 1) % slides.length;
+        positionSlides();
+    }
+    function prevSlide() {
+        currentIndex = (currentIndex - 1 + slides.length) % slides.length;
+        positionSlides();
+    }
+
+    function positionSlides() {
+        slides.forEach((slide, i) => {
+            let rawOffset = (i - currentIndex + slides.length) % slides.length;
+            if (rawOffset > slides.length / 2) {
+                rawOffset = rawOffset - slides.length;
+            }
+
+            let offsetFactor = 90;
+            let tiltFactor = 15;
+
+            let translateX = rawOffset * offsetFactor;
+            let rotateY = rawOffset * tiltFactor;
+            let zIndex = -Math.abs(rawOffset);
+
+            let scale = Math.max(0.7, 1 - Math.abs(rawOffset) * 0.1);
+            let opacity = Math.max(0.3, 1 - Math.abs(rawOffset) * 0.2);
+
+            slide.style.zIndex = zIndex;
+            slide.style.opacity = opacity.toString();
+            slide.style.transform = `
+                translate(-50%, -50%)
+                translateX(${translateX}%)
+                rotateY(${rotateY}deg)
+                scale(${scale})
+            `;
+        });
+    }
+</script>
+
+</body>
+</html>
