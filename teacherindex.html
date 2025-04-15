@@ -124,23 +124,6 @@
 </div>
 
 <script>
-    // ---------------- LOAD PROJECT IF LINKED ----------------
-    const urlParams = new URLSearchParams(window.location.search);
-    const projectFile = urlParams.get('project');
-
-    if (projectFile) {
-        fetch(projectFile)
-            .then(res => res.json())
-            .then(data => {
-                localStorage.setItem("currentProject", JSON.stringify(data));
-                window.location.href = "ucitel.html"; // redirect without param
-            })
-            .catch(err => {
-                alert("Nepodarilo sa načítať projekt.");
-                console.error(err);
-            });
-    }
-
     const defaultGames = [
         {
             title: 'Skrečkoland',
@@ -210,18 +193,16 @@
             }
 
             card.addEventListener('click', () => {
-                if (game.projectFile) {
-                    window.location.href = `ucitel.html?project=${encodeURIComponent(game.projectFile)}`;
-                } else {
-                    const project = {
-                        assignmentTitle: game.title,
-                        assignmentDescription: game.task,
-                        background: game.thumbnail,
-                        objects: []
-                    };
-                    localStorage.setItem("currentProject", JSON.stringify(project));
-                    window.location.href = 'ucitel.html';
-                }
+                fetch(game.projectFile)
+                    .then(res => res.json())
+                    .then(data => {
+                        localStorage.setItem("currentProject", JSON.stringify(data));
+                        window.location.href = 'ucitel.html';
+                    })
+                    .catch(err => {
+                        alert("Nepodarilo sa načítať projekt.");
+                        console.error(err);
+                    });
             });
 
             gameGrid.appendChild(card);
