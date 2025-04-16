@@ -92,6 +92,28 @@
         .selected {
             outline: 2px solid red;
         }
+        .context-menu {
+            position: absolute;
+            background: #fff;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            z-index: 1000;
+            display: none;
+        }
+        .context-menu button {
+            display: block;
+            width: 100%;
+            background: none;
+            border: none;
+            padding: 8px 12px;
+            text-align: left;
+            font-size: 0.95rem;
+            cursor: pointer;
+        }
+        .context-menu button:hover {
+            background: #ffe0ec;
+        }
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.0/jszip.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
@@ -99,6 +121,9 @@
 
 </head>
 <body>
+<div id="contextMenu" class="context-menu">
+    <button onclick="toggleProgrammable()">Prepnúť programovanie</button>
+</div>
 <header>
     <div class="button-group">
         <input type="file" id="backgroundUpload" style="display: none;" accept="image/*,image/svg+xml" />
@@ -124,6 +149,43 @@
     <div id="scene">
         <img id="sceneCanvas" alt="Background" />
     </div>
+    <div id="textEditorModal" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:#fff; border:2px solid #CCC; border-radius:12px; padding:20px; z-index:9999; box-shadow:0 4px 8px rgba(0,0,0,0.2); width:400px; max-width:90%;">
+        <h2 style="margin-bottom: 10px;">Uprav text zadania</h2>
+
+        <label for="titleInput">Názov úlohy:</label>
+        <input id="titleInput" type="text" style="width:100%; margin-bottom:10px; padding:8px;" />
+
+        <label for="descInput">Popis úlohy:</label>
+        <textarea id="descInput" rows="5" style="width:100%; padding:8px; font-family:Arial; font-size:16px; color:#000;"></textarea>
+
+        <div style="margin: 10px 0;">
+            <label>Font:</label>
+            <select id="fontFamilySelect">
+                <option value="Comic Sans MS">Comic Sans MS</option>
+                <option value="Arial">Arial</option>
+                <option value="Verdana">Verdana</option>
+                <option value="Courier New">Courier New</option>
+            </select>
+
+            <label style="margin-left:10px;">Veľkosť:</label>
+            <select id="fontSizeSelect">
+                <option value="14px">14</option>
+                <option value="16px" selected>16</option>
+                <option value="18px">18</option>
+                <option value="20px">20</option>
+            </select>
+
+            <label style="margin-left:10px;">Farba:</label>
+            <input type="color" id="fontColorInput" value="#000000" />
+        </div>
+
+        <div style="text-align:right; margin-top: 10px;">
+            <button onclick="closeTextEditor(true)" style="background:#C8E6C9; padding:8px 16px; border-radius:8px; border:none;">✅ Uložiť</button>
+            <button onclick="closeTextEditor(false)" style="background:#FFE0EC; padding:8px 16px; border-radius:8px; border:none;">Zrušiť</button>
+        </div>
+    </div>
+
+
 </main>
 <script>
     let project;
@@ -197,6 +259,14 @@
                 e.stopPropagation();
                 selectObject(obj.id);
             });
+            container.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+                selectObject(obj.id);
+                const menu = document.getElementById('contextMenu');
+                menu.style.display = 'block';
+                menu.style.left = `${e.pageX}px`;
+                menu.style.top = `${e.pageY}px`;
+            });
 
             resizeHandle.addEventListener('mousedown', (e) => {
                 e.stopPropagation();
@@ -244,7 +314,7 @@
                 document.addEventListener('mousemove', rotateMove);
                 document.addEventListener('mouseup', rotateUp);
             });
-
+            renderTextPreview();
             scene.appendChild(container);
         });
     }
@@ -381,7 +451,18 @@
             saveProject();
             renderScene();
     });
+    function toggleProgrammable() {
+        if (!selectedObjectId) return;
+        const obj = project.objects.find(o => o.id === selectedObjectId);
+        obj.programmable = !obj.programmable;
+        saveProject();
+        alert(`Objekt je teraz ${obj.programmable ? 'programovateľný' : 'statický'}.`);
+        document.getElementById('contextMenu').style.display = 'none';
+    }
 
+    window.addEventListener("click", () => {
+        document.getElementById("contextMenu").style.display = "none";
+    });
     document.getElementById('configureProgram').addEventListener('click', () => {
         if (!selectedObjectId) return alert("Vyberte objekt, ktorý chcete programovať.");
         const obj = project.objects.find(o => o.id === selectedObjectId);
@@ -395,13 +476,78 @@
     });
 
     document.getElementById('editText').addEventListener('click', () => {
-        let newTitle = prompt("Zadajte názov úlohy:", project.assignmentTitle);
-        if (newTitle !== null) project.assignmentTitle = newTitle.trim() || project.assignmentTitle;
-        let newDesc = prompt("Zadajte popis úlohy:", project.assignmentDescription);
-        if (newDesc !== null) project.assignmentDescription = newDesc.trim() || project.assignmentDescription;
-        saveProject();
-        alert("Údaje o úlohe boli aktualizované.");
+        document.getElementById('titleInput').value = project.assignmentTitle || "";
+        document.getElementById('descInput').value = project.assignmentDescription || "";
+
+        const style = project.textStyle || {};
+        document.getElementById('fontFamilySelect').value = style.font || 'Comic Sans MS';
+        document.getElementById('fontSizeSelect').value = style.size || '16px';
+        document.getElementById('fontColorInput').value = style.color || '#000000';
+
+        const textarea = document.getElementById('descInput');
+        textarea.style.fontFamily = document.getElementById('fontFamilySelect').value;
+        textarea.style.fontSize = document.getElementById('fontSizeSelect').value;
+        textarea.style.color = document.getElementById('fontColorInput').value;
+
+        document.getElementById('textEditorModal').style.display = 'block';
     });
+
+    document.getElementById('fontFamilySelect').addEventListener('change', function() {
+        document.getElementById('descInput').style.fontFamily = this.value;
+    });
+    document.getElementById('fontSizeSelect').addEventListener('change', function() {
+        document.getElementById('descInput').style.fontSize = this.value;
+    });
+    document.getElementById('fontColorInput').addEventListener('input', function() {
+        document.getElementById('descInput').style.color = this.value;
+    });
+
+    function closeTextEditor(saveChanges) {
+        const modal = document.getElementById('textEditorModal');
+        if (saveChanges) {
+            const newTitle = document.getElementById('titleInput').value.trim();
+            const newDesc = document.getElementById('descInput').value.trim();
+            const font = document.getElementById('fontFamilySelect').value;
+            const size = document.getElementById('fontSizeSelect').value;
+            const color = document.getElementById('fontColorInput').value;
+
+            if (newTitle) project.assignmentTitle = newTitle;
+            if (newDesc) project.assignmentDescription = newDesc;
+            project.textStyle = { font, size, color };
+
+            saveProject();
+            renderTextPreview();
+            alert("Údaje o úlohe boli aktualizované.");
+        }
+        modal.style.display = 'none';
+    }
+    function renderTextPreview() {
+        const scene = document.getElementById('scene');
+        let previewEl = document.getElementById('textPreview');
+        if (!previewEl) {
+            previewEl = document.createElement('div');
+            previewEl.id = 'textPreview';
+            previewEl.style.position = 'absolute';
+            previewEl.style.top = '20px';
+            previewEl.style.left = '20px';
+            previewEl.style.maxWidth = '40%';
+            previewEl.style.padding = '10px';
+            previewEl.style.backgroundColor = 'rgba(255, 255, 255, 0.7)';
+            previewEl.style.border = '2px dashed #ccc';
+            previewEl.style.borderRadius = '10px';
+            previewEl.style.zIndex = '20';
+            scene.appendChild(previewEl);
+        }
+
+        const style = project.textStyle || { font: 'Comic Sans MS', size: '16px', color: '#000000' };
+        previewEl.style.fontFamily = style.font;
+        previewEl.style.fontSize = style.size;
+        previewEl.style.color = style.color;
+
+        previewEl.innerHTML = `<strong>${project.assignmentTitle}</strong><br><br>${project.assignmentDescription.replace(/\n/g, '<br>')}`;
+    }
+
+
 
     document.getElementById('saveProject').addEventListener('click', () => {
         const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(project, null, 2));
