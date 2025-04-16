@@ -4,22 +4,14 @@
     <meta charset="UTF-8" />
     <title>Živé obrázky – Editor úlohy</title>
     <style>
-        /* RESET & BASIC STYLING */
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        html, body {
-            height: 100%;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { height: 100%; }
         body {
             font-family: 'Comic Sans MS', Arial, sans-serif;
             background: linear-gradient(to bottom, #41eafa, #89F8CE);
             color: #4e342e;
             overflow: hidden;
         }
-        /* HEADER */
         header {
             background: linear-gradient(to bottom, #89F8CE, #41eafa);
             padding: 12px;
@@ -33,6 +25,33 @@
             display: flex;
             gap: 10px;
             align-items: center;
+        }
+        .handle {
+            z-index: 10;
+            border-radius: 50%;
+            display: none;
+        }
+        .object.selected .handle {
+            display: block;
+        }
+        .resize-handle {
+            width: 10px;
+            height: 10px;
+            background: black;
+            position: absolute;
+            right: -5px;
+            bottom: -5px;
+            cursor: nwse-resize;
+        }
+        .rotate-handle {
+            width: 10px;
+            height: 10px;
+            background: blue;
+            position: absolute;
+            top: -20px;
+            left: 50%;
+            transform: translateX(-50%);
+            cursor: grab;
         }
         header button {
             background: #ffe0ec;
@@ -48,135 +67,228 @@
             background: #ffd1e3;
             transform: translateY(-2px) scale(1.05);
         }
-        /* SCENE CONTAINER */
         #scene {
             position: relative;
             height: calc(100vh - 80px);
-            background: #d0eaff;
+            background: #ffffff;
             margin: 0 auto;
             overflow: hidden;
-            box-shadow: inset 0 0 10px rgba(0,0,0,0.2);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        #sceneCanvas {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
         }
         .object {
             position: absolute;
             width: 100px;
             height: 100px;
             cursor: grab;
+            transform-origin: center center;
         }
         .selected {
             outline: 2px solid red;
         }
     </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.0/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+
+
 </head>
 <body>
 <header>
     <div class="button-group">
-        <!-- Background & Object Controls -->
-        <input type="file" id="backgroundUpload" style="display: none;" accept="image/*" />
+        <input type="file" id="backgroundUpload" style="display: none;" accept="image/*,image/svg+xml" />
         <button id="loadBackground">Načítaj pozadie</button>
-        <input type="file" id="objectUpload" style="display: none;" accept="image/*" />
+        <input type="file" id="objectUpload" style="display: none;" accept="image/*" multiple />
         <button id="addObject">Vlož objekt</button>
         <button id="copyObject">Vlož kópiu objektu</button>
         <button id="deleteObject">Zruš objekt</button>
+        <button id="transformObject">Uprav objekt</button>
+        <button id="addCostume">Pridaj kostým</button>
+        <button id="nextCostume">Ďalší kostým</button>
+
     </div>
     <div class="button-group">
-        <!-- Editing & Saving -->
         <button id="configureProgram">Programuj</button>
         <button id="editText">Vlož text</button>
-        <button id="saveProject">Zapíš projekt</button>
+        <button id="saveProject">Zapiš projekt</button>
+        <button id="downloadZip">Stiahni ako ZIP</button>
+
     </div>
 </header>
 <main>
-    <div id="scene"></div>
+    <div id="scene">
+        <img id="sceneCanvas" alt="Background" />
+    </div>
 </main>
 <script>
-    // --------------------- Project Model ---------------------
-    // Load project from localStorage or create a new default project.
-    let project = JSON.parse(localStorage.getItem("currentProject")) || {
-        assignmentTitle: "Nová úloha",
-        assignmentDescription: "Zadaj sem popis úlohy.",
-        background: "",
-        objects: [] // Each object: { id, image, x, y, rotation, scale, blocks: [] }
-    };
+    let project;
+    let selectedObjectId = null;
 
-    // Save the project JSON to localStorage.
+    const urlParams = new URLSearchParams(window.location.search);
+    const projectPath = urlParams.get('project');
+
+    async function loadProject() {
+        if (projectPath) {
+            try {
+                const response = await fetch(projectPath);
+                const data = await response.json();
+                localStorage.setItem("currentProject", JSON.stringify(data));
+                return data;
+            } catch (e) {
+                alert("Nepodarilo sa načítať projekt zo súboru.");
+                console.error(e);
+                return getDefaultProject();
+            }
+        }
+        return JSON.parse(localStorage.getItem("currentProject")) || getDefaultProject();
+    }
+
+    function getDefaultProject() {
+        return {
+            assignmentTitle: "Nová úloha",
+            assignmentDescription: "Zadaj sem popis úlohy.",
+            background: "",
+            objects: []
+        };
+    }
+
     function saveProject() {
         localStorage.setItem("currentProject", JSON.stringify(project));
     }
 
-    // --------------------- Scene Rendering ---------------------
     function renderScene() {
         const scene = document.getElementById('scene');
-        scene.innerHTML = "";
-        if (project.background) {
-            scene.style.backgroundImage = `url('${project.background}')`;
-            scene.style.backgroundSize = 'cover';
-        } else {
-            scene.style.backgroundImage = "";
-        }
+        const canvas = document.getElementById('sceneCanvas');
+        scene.querySelectorAll('.object, .handle').forEach(o => o.remove());
+        canvas.src = project.background || "";
+
         project.objects.forEach(obj => {
+            const container = document.createElement('div');
+            container.className = 'object';
+            container.style.left = obj.x + 'px';
+            container.style.top = obj.y + 'px';
+            container.style.transform = `rotate(${obj.rotation}deg) scale(${obj.scale})`;
+            container.dataset.id = obj.id;
+            container.style.position = 'absolute';
+            container.style.transformOrigin = 'center center';
+
             const img = document.createElement('img');
             img.src = obj.image;
-            img.className = 'object';
-            img.style.left = obj.x + 'px';
-            img.style.top = obj.y + 'px';
-            img.style.transform = `rotate(${obj.rotation}deg) scale(${obj.scale})`;
-            img.dataset.id = obj.id;
-            // Enable dragging and selection.
-            img.addEventListener('mousedown', startDrag);
-            img.addEventListener('click', (e) => {
+            img.style.width = '100%';
+            img.style.height = '100%';
+            img.draggable = false;
+            container.appendChild(img);
+
+            const resizeHandle = document.createElement('div');
+            resizeHandle.className = 'resize-handle handle';
+            container.appendChild(resizeHandle);
+
+            const rotateHandle = document.createElement('div');
+            rotateHandle.className = 'rotate-handle handle';
+            container.appendChild(rotateHandle);
+
+            container.addEventListener('mousedown', startDrag);
+            container.addEventListener('click', (e) => {
                 e.stopPropagation();
                 selectObject(obj.id);
             });
-            scene.appendChild(img);
+
+            resizeHandle.addEventListener('mousedown', (e) => {
+                e.stopPropagation();
+                const startX = e.clientX;
+                const startY = e.clientY;
+                const startScale = obj.scale;
+
+                function resizeMove(ev) {
+                    const dx = ev.clientX - startX;
+                    const dy = ev.clientY - startY;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    obj.scale = Math.max(0.1, startScale + dist / 200);
+                    renderScene();
+                }
+
+                function resizeUp() {
+                    document.removeEventListener('mousemove', resizeMove);
+                    document.removeEventListener('mouseup', resizeUp);
+                    saveProject();
+                }
+
+                document.addEventListener('mousemove', resizeMove);
+                document.addEventListener('mouseup', resizeUp);
+            });
+
+            rotateHandle.addEventListener('mousedown', (e) => {
+                e.stopPropagation();
+                const rect = container.getBoundingClientRect();
+                const centerX = rect.left + rect.width / 2;
+                const centerY = rect.top + rect.height / 2;
+
+                function rotateMove(ev) {
+                    const dx = ev.clientX - centerX;
+                    const dy = ev.clientY - centerY;
+                    obj.rotation = Math.atan2(dy, dx) * (180 / Math.PI);
+                    renderScene();
+                }
+
+                function rotateUp() {
+                    document.removeEventListener('mousemove', rotateMove);
+                    document.removeEventListener('mouseup', rotateUp);
+                    saveProject();
+                }
+
+                document.addEventListener('mousemove', rotateMove);
+                document.addEventListener('mouseup', rotateUp);
+            });
+
+            scene.appendChild(container);
         });
     }
 
-    // --------------------- Object Selection and Dragging ---------------------
-    let selectedObjectId = null;
     function selectObject(id) {
         selectedObjectId = id;
         document.querySelectorAll('.object').forEach(el => el.classList.remove('selected'));
-        const selEl = document.querySelector(`img.object[data-id="${id}"]`);
+        const selEl = document.querySelector(`div.object[data-id="${id}"]`);
         if (selEl) selEl.classList.add('selected');
     }
+
     let dragOffsetX, dragOffsetY;
     function startDrag(e) {
-        const objEl = e.target;
+        const objEl = e.currentTarget;
         selectedObjectId = objEl.dataset.id;
-        dragOffsetX = e.offsetX;
-        dragOffsetY = e.offsetY;
+        const rect = objEl.getBoundingClientRect();
+        dragOffsetX = e.clientX - rect.left;
+        dragOffsetY = e.clientY - rect.top;
         document.addEventListener('mousemove', dragObject);
         document.addEventListener('mouseup', stopDrag);
     }
+
     function dragObject(e) {
         const sceneRect = document.getElementById('scene').getBoundingClientRect();
         let x = e.clientX - sceneRect.left - dragOffsetX;
         let y = e.clientY - sceneRect.top - dragOffsetY;
-        const objEl = document.querySelector(`img.object[data-id="${selectedObjectId}"]`);
-        if (objEl) {
-            objEl.style.left = x + 'px';
-            objEl.style.top = y + 'px';
+        const obj = project.objects.find(o => o.id === selectedObjectId);
+        if (obj) {
+            obj.x = x;
+            obj.y = y;
+            renderScene();
         }
-        project.objects = project.objects.map(obj => {
-            if (obj.id === selectedObjectId) {
-                obj.x = x;
-                obj.y = y;
-            }
-            return obj;
-        });
     }
-    function stopDrag(e) {
+
+    function stopDrag() {
         document.removeEventListener('mousemove', dragObject);
         document.removeEventListener('mouseup', stopDrag);
         saveProject();
     }
 
-    // --------------------- Button Handlers ---------------------
-    // 1. Load Background Image
     document.getElementById('loadBackground').addEventListener('click', () => {
         document.getElementById('backgroundUpload').click();
     });
+
     document.getElementById('backgroundUpload').addEventListener('change', (e) => {
         const file = e.target.files[0];
         if (file) {
@@ -189,11 +301,45 @@
             reader.readAsDataURL(file);
         }
     });
+    document.getElementById('addCostume').addEventListener('click', () => {
+        if (!selectedObjectId) return alert("Najprv vyber objekt.");
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*';
+        input.style.display = 'none';
+        document.body.appendChild(input);
+        input.click();
+        input.addEventListener('change', () => {
+            const file = input.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    const obj = project.objects.find(o => o.id === selectedObjectId);
+                    if (!obj.costumes) obj.costumes = [obj.image];
+                    obj.costumes.push(event.target.result);
+                    saveProject();
+                    alert("Kostým pridaný.");
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+        input.remove();
+    });
+    document.getElementById('nextCostume').addEventListener('click', () => {
+        if (!selectedObjectId) return alert("Najprv vyber objekt.");
+        const obj = project.objects.find(o => o.id === selectedObjectId);
+        if (!obj.costumes || obj.costumes.length === 0) return;
+        const currentIndex = obj.costumes.indexOf(obj.image);
+        const nextIndex = (currentIndex + 1) % obj.costumes.length;
+        obj.image = obj.costumes[nextIndex];
+        saveProject();
+        renderScene();
+    });
 
-    // 2. Add New Object
     document.getElementById('addObject').addEventListener('click', () => {
         document.getElementById('objectUpload').click();
     });
+
     document.getElementById('objectUpload').addEventListener('change', (e) => {
         const file = e.target.files[0];
         if (file) {
@@ -216,12 +362,8 @@
         }
     });
 
-    // 3. Copy Selected Object
     document.getElementById('copyObject').addEventListener('click', () => {
-        if (!selectedObjectId) {
-            alert("Vyberte objekt na kopírovanie.");
-            return;
-        }
+        if (!selectedObjectId) return alert("Vyberte objekt na kopírovanie.");
         const orig = project.objects.find(obj => obj.id === selectedObjectId);
         if (orig) {
             const copy = { ...orig, id: Date.now().toString(), x: orig.x + 20, y: orig.y + 20 };
@@ -231,54 +373,36 @@
         }
     });
 
-    // 4. Delete Selected Object
     document.getElementById('deleteObject').addEventListener('click', () => {
-        if (!selectedObjectId) {
-            alert("Vyberte objekt na zrušenie.");
-            return;
-        }
-        if (confirm("Naozaj chcete zrušiť tento objekt?")) {
+        if (!selectedObjectId) return alert("Vyberte objekt na zrušenie.");
+
             project.objects = project.objects.filter(obj => obj.id !== selectedObjectId);
             selectedObjectId = null;
             saveProject();
             renderScene();
-        }
     });
 
-    // 5. Block Editor for Selected Object ("Programuj")
     document.getElementById('configureProgram').addEventListener('click', () => {
-        if (!selectedObjectId) {
-            alert("Vyberte objekt, ktorý chcete programovať.");
-            return;
-        }
-        // Get current blocks (if any) as a comma-separated string.
+        if (!selectedObjectId) return alert("Vyberte objekt, ktorý chcete programovať.");
         const obj = project.objects.find(o => o.id === selectedObjectId);
         const currentBlocks = obj.blocks.join(", ");
         let input = prompt("Zadajte bloky oddelené čiarkou (napr. štart, dopredu, čakaj):", currentBlocks);
         if (input !== null) {
-            // Split input by commas and trim spaces.
-            obj.blocks = input.split(",").map(s => s.trim()).filter(s => s !== "");
+            obj.blocks = input.split(",").map(s => s.trim()).filter(s => s);
             saveProject();
             alert("Bloky boli aktualizované:\n" + obj.blocks.join(", "));
         }
     });
 
-    // 6. Text Editor for Assignment ("Vlož text")
     document.getElementById('editText').addEventListener('click', () => {
-        // Use prompt to update the assignment title and description.
         let newTitle = prompt("Zadajte názov úlohy:", project.assignmentTitle);
-        if (newTitle !== null) {
-            project.assignmentTitle = newTitle.trim() || project.assignmentTitle;
-        }
+        if (newTitle !== null) project.assignmentTitle = newTitle.trim() || project.assignmentTitle;
         let newDesc = prompt("Zadajte popis úlohy:", project.assignmentDescription);
-        if (newDesc !== null) {
-            project.assignmentDescription = newDesc.trim() || project.assignmentDescription;
-        }
+        if (newDesc !== null) project.assignmentDescription = newDesc.trim() || project.assignmentDescription;
         saveProject();
         alert("Údaje o úlohe boli aktualizované.");
     });
 
-    // 7. Save (Export) Project as JSON
     document.getElementById('saveProject').addEventListener('click', () => {
         const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(project, null, 2));
         const a = document.createElement('a');
@@ -289,8 +413,77 @@
         a.remove();
     });
 
-    // --------------------- Initialization ---------------------
-    renderScene();
+
+    document.getElementById('downloadZip').addEventListener('click', async () => {
+        const zip = new JSZip();
+
+        // Clone project so we can safely modify it for ZIP
+        const zipProject = JSON.parse(JSON.stringify(project));
+
+        // Prepare /images/ folder
+        const imgFolder = zip.folder("images");
+
+        // Save background
+        if (zipProject.background.startsWith("data:")) {
+            const bgBlob = await fetch(zipProject.background).then(r => r.blob());
+            const bgFilename = "background.png";
+            imgFolder.file(bgFilename, bgBlob);
+            zipProject.background = "images/" + bgFilename;
+        }
+
+        // Save each object image
+        for (let i = 0; i < zipProject.objects.length; i++) {
+            const obj = zipProject.objects[i];
+            const baseFilename = `object${i}`;
+
+            // Save main image
+            if (obj.image.startsWith("data:")) {
+                const objBlob = await fetch(obj.image).then(r => r.blob());
+                const objFilename = `${baseFilename}.png`;
+                imgFolder.file(objFilename, objBlob);
+                obj.image = "images/" + objFilename;
+            }
+
+            // Save costumes if any
+            if (obj.costumes && obj.costumes.length > 0) {
+                for (let j = 0; j < obj.costumes.length; j++) {
+                    const costume = obj.costumes[j];
+                    if (costume.startsWith("data:")) {
+                        const costumeBlob = await fetch(costume).then(r => r.blob());
+                        const costumeFilename = `${baseFilename}_costume${j}.png`;
+                        imgFolder.file(costumeFilename, costumeBlob);
+                        obj.costumes[j] = "images/" + costumeFilename;
+                    }
+                }
+            }
+        }
+
+        // Save JSON
+        zip.file("projekt.json", JSON.stringify(zipProject, null, 2));
+
+        // Download
+        zip.generateAsync({ type: "blob" }).then(function (content) {
+            saveAs(content, `${zipProject.assignmentTitle || 'projekt'}.zip`);
+        });
+    });
+
+
+
+    document.getElementById('transformObject').addEventListener('click', () => {
+        if (!selectedObjectId) return alert("Najprv vyber objekt.");
+        const obj = project.objects.find(o => o.id === selectedObjectId);
+        const newRotation = prompt("Zadajte rotáciu objektu v stupňoch:", obj.rotation);
+        const newScale = prompt("Zadajte mierku objektu (napr. 1 = 100%):", obj.scale);
+        if (newRotation !== null) obj.rotation = parseFloat(newRotation) || 0;
+        if (newScale !== null) obj.scale = parseFloat(newScale) || 1;
+        saveProject();
+        renderScene();
+    });
+
+    loadProject().then(p => {
+        project = p;
+        renderScene();
+    });
 </script>
 </body>
 </html>

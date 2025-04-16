@@ -3,6 +3,8 @@
 <head>
     <meta charset="UTF-8" />
     <title>Živé obrázky – Správa projektov</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.0/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -19,9 +21,9 @@
             overflow: hidden;
         }
         header {
-            background: linear-gradient(to bottom, #89F8CE, #41eafa);
-            color: #4e342e;
-            padding: 12px;
+            background: linear-gradient(to bottom, #fa9494, #FFA07A);
+            color: white;
+            padding: 20px 40px;
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -32,38 +34,39 @@
             font-size: 2.5rem;
         }
         .container {
-            padding: 20px;
+            padding: 30px 40px;
             overflow-y: auto;
-            height: calc(100vh - 80px);
+            height: calc(100vh - 100px);
         }
         .upload-btn {
             display: inline-block;
-            margin: 10px 10px 20px 0;
-            padding: 10px 20px;
+            margin: 10px 10px 30px 0;
+            padding: 12px 24px;
             font-size: 1.2rem;
             background-color: #ffe0ec;
             color: #4e342e;
             border: 2px solid #FFF4B5;
-            border-radius: 8px;
+            border-radius: 12px;
             cursor: pointer;
-            transition: background 0.3s ease;
+            transition: background 0.3s ease, transform 0.2s;
         }
         .upload-btn:hover {
             background-color: #ffd1e3;
+            transform: translateY(-2px);
         }
         #folder-upload, #json-upload {
             display: none;
         }
         .grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 20px;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 24px;
         }
         .card {
             background: #fff;
             border: 2px solid #FFF4B5;
-            border-radius: 10px;
-            box-shadow: 0 3px 6px rgba(0,0,0,0.2);
+            border-radius: 16px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
             overflow: hidden;
             text-align: center;
             transition: transform 0.2s ease;
@@ -85,8 +88,8 @@
             display: block;
         }
         .card .card-title {
-            padding: 10px;
-            font-size: 1.2rem;
+            padding: 12px;
+            font-size: 1.3rem;
             color: #4e342e;
             flex-grow: 1;
             display: flex;
@@ -96,19 +99,19 @@
         }
         .remove-btn {
             position: absolute;
-            top: 8px;
-            right: 8px;
-            background: rgba(255, 224, 236, 0.9);
+            top: 10px;
+            right: 10px;
+            background: rgba(255, 224, 236, 0.95);
             border: none;
-            border-radius: 4px;
-            padding: 4px 8px;
+            border-radius: 8px;
+            padding: 6px 10px;
             cursor: pointer;
             font-size: 0.9rem;
             color: #4e342e;
             transition: background 0.2s ease;
         }
         .remove-btn:hover {
-            background: #ffd1e3;
+            background: #ffc6db;
         }
     </style>
 </head>
@@ -118,15 +121,14 @@
 </header>
 <div class="container">
     <button class="upload-btn" id="createEmptyBtn">➕ Nový projekt</button>
-    <button class="upload-btn" id="uploadJsonBtn">⬆️ Nahrať projekt (.json)</button>
-    <input type="file" id="json-upload" accept="application/json">
+    <button class="upload-btn" id="uploadFolderBtn">📁 Nahraj zložku s projektom</button>
+    <input type="file" id="folder-upload" webkitdirectory directory multiple>
     <div class="grid" id="gameGrid"></div>
 </div>
-
 <script>
     const defaultGames = [
         {
-            title: 'Skrečkoland',
+            title: 'Škrečkoland',
             task: 'Zaveď škrečka Tušíka k domčeku.',
             thumbnail: 'hamster_village/hamstervillage.png',
             projectFile: 'hamster_village/defaultProject.json'
@@ -193,16 +195,21 @@
             }
 
             card.addEventListener('click', () => {
-                fetch(game.projectFile)
-                    .then(res => res.json())
-                    .then(data => {
-                        localStorage.setItem("currentProject", JSON.stringify(data));
-                        window.location.href = 'ucitel.html';
-                    })
-                    .catch(err => {
-                        alert("Nepodarilo sa načítať projekt.");
-                        console.error(err);
-                    });
+                if (game.projectData) {
+                    localStorage.setItem("currentProject", JSON.stringify(game.projectData));
+                    window.location.href = 'ucitel.html';
+                } else if (game.projectFile) {
+                    fetch(game.projectFile)
+                        .then(res => res.json())
+                        .then(data => {
+                            localStorage.setItem("currentProject", JSON.stringify(data));
+                            window.location.href = 'ucitel.html';
+                        })
+                        .catch(err => {
+                            alert("Nepodarilo sa načítať projekt.");
+                            console.error(err);
+                        });
+                }
             });
 
             gameGrid.appendChild(card);
@@ -220,27 +227,72 @@
         window.location.href = 'ucitel.html';
     });
 
-    document.getElementById('uploadJsonBtn').addEventListener('click', () => {
-        document.getElementById('json-upload').click();
+    document.getElementById('uploadFolderBtn').addEventListener('click', () => {
+        document.getElementById('folder-upload').click();
     });
 
-    document.getElementById('json-upload').addEventListener('change', (e) => {
+
+    document.getElementById('folder-upload').addEventListener('change', async (e) => {
         const file = e.target.files[0];
         if (!file) return;
 
-        const reader = new FileReader();
-        reader.onload = function(evt) {
-            try {
-                const json = JSON.parse(evt.target.result);
-                localStorage.setItem("currentProject", JSON.stringify(json));
-                window.location.href = 'ucitel.html';
-            } catch (err) {
-                alert("Neplatný JSON súbor.");
-                console.error(err);
+        try {
+            const zip = await JSZip.loadAsync(file);
+            const jsonEntry = Object.keys(zip.files).find(name =>
+                name.toLowerCase().endsWith('/projekt.json') || name.toLowerCase() === 'projekt.json'
+            );
+
+            if (!jsonEntry) {
+                alert("ZIP súbor neobsahuje 'projekt.json'.");
+                return;
             }
-        };
-        reader.readAsText(file);
+
+            const jsonData = await zip.file(jsonEntry).async("string");
+            const project = JSON.parse(jsonData);
+
+            // Replace background path with Blob URL
+            const backgroundFileName = project.background?.split('/').pop();
+            if (backgroundFileName && zip.file(`images/${backgroundFileName}`)) {
+                const bgBlob = await zip.file(`images/${backgroundFileName}`).async("blob");
+                project.background = URL.createObjectURL(bgBlob);
+            }
+
+            // Replace object image and costumes paths with Blob URLs
+            for (const obj of project.objects) {
+                const imageFileName = obj.image?.split('/').pop();
+                if (imageFileName && zip.file(`images/${imageFileName}`)) {
+                    const imageBlob = await zip.file(`images/${imageFileName}`).async("blob");
+                    obj.image = URL.createObjectURL(imageBlob);
+                }
+
+                if (Array.isArray(obj.costumes)) {
+                    for (let i = 0; i < obj.costumes.length; i++) {
+                        const costumeFile = obj.costumes[i]?.split('/').pop();
+                        if (costumeFile && zip.file(`images/${costumeFile}`)) {
+                            const costumeBlob = await zip.file(`images/${costumeFile}`).async("blob");
+                            obj.costumes[i] = URL.createObjectURL(costumeBlob);
+                        }
+                    }
+                }
+            }
+
+            const game = {
+                title: project.assignmentTitle,
+                task: project.assignmentDescription,
+                thumbnail: project.background,
+                projectData: project
+            };
+
+            const uploaded = loadUploadedGames();
+            uploaded.push(game);
+            saveUploadedGames(uploaded);
+            loadGames();
+        } catch (err) {
+            alert("Neplatný ZIP súbor alebo chyba pri čítaní.");
+            console.error(err);
+        }
     });
+
 
     loadGames();
 </script>
