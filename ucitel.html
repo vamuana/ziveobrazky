@@ -13,7 +13,7 @@
             overflow: hidden;
         }
         header {
-            background: linear-gradient(to bottom, #89F8CE, #41eafa);
+            background: linear-gradient(to bottom, #fa9494, #FFA07A);
             padding: 12px;
             display: flex;
             justify-content: space-between;
@@ -54,7 +54,7 @@
             cursor: grab;
         }
         header button {
-            background: #ffe0ec;
+            background: #B7F5F4;
             border: 2px solid #FFF4B5;
             padding: 10px 16px;
             border-radius: 14px;
@@ -67,6 +67,79 @@
             background: #ffd1e3;
             transform: translateY(-2px) scale(1.05);
         }
+        /* === BLOCK EDITOR (EDIT MODE) === */
+        #block-editor {
+            position: absolute;
+            top: 10%;
+            left: 5%;
+            width: 90%;
+            height: 80%;
+            background: #fff;
+            border: 2px solid #444;
+            border-radius: 8px;
+            display: none;       /* hidden until invoked */
+            z-index: 50;
+            padding: 1rem;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+        #block-editor h2 {
+            margin-bottom: 0.5rem;
+            font-size: 1.2rem;
+        }
+        #block-palette {
+            background: #E0F7FA;       /* pale blue */
+            width: 30%;
+            height: calc(100% - 2rem);
+            float: left;
+            overflow-y: auto;
+            padding: 0.5rem;
+            position: relative;
+        }
+        #block-palette .block {
+            margin-bottom: 0.5rem;
+            cursor: grab;
+        }
+        #block-palette #dielna-btn {
+            position: absolute;
+            bottom: 0.5rem;
+            right: 0.5rem;
+            padding: 0.5rem 1rem;
+            background: #0288D1;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        #program-area {
+            background: #E0E0E0;       /* light grey */
+            width: 65%;
+            height: calc(100% - 2rem);
+            float: right;
+            overflow-y: auto;
+            padding: 0.5rem;
+        }
+        #program-area .block {
+            margin-bottom: 0.5rem;
+            cursor: default;
+        }
+        #exit-editor-btn {
+            position: absolute;
+            bottom: 0.5rem;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 0.5rem 1rem;
+            background: #66BB6A;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        /* small helper to highlight the “pressed” Programuj button */
+        button#configureProgram.active {
+            background: #1976D2;
+            color: #fff;
+        }
+
         #scene {
             position: relative;
             height: calc(100vh - 80px);
@@ -149,6 +222,20 @@
     <div id="scene">
         <img id="sceneCanvas" alt="Background" />
     </div>
+    <div id="block-editor">
+        <h2>Programovanie objektu</h2>
+        <div id="block-palette">
+            <!-- you can clone these from ziak.html too -->
+            <div class="block block-štart" draggable="true" data-command="štart">Štart</div>
+            <div class="block block-dopredu" draggable="true" data-command="dopredu">Dopredu</div>
+            <div class="block block-natoč" draggable="true" data-command="natoč">Natoč</div>
+            <!-- …and all your other block types… -->
+            <button id="dielna-btn">Dielňa</button>
+        </div>
+        <div id="program-area" ondragover="event.preventDefault()"></div>
+        <button id="exit-editor-btn">✔ Hotovo</button>
+    </div>
+
     <div id="textEditorModal" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:#fff; border:2px solid #CCC; border-radius:12px; padding:20px; z-index:9999; box-shadow:0 4px 8px rgba(0,0,0,0.2); width:400px; max-width:90%;">
         <h2 style="margin-bottom: 10px;">Uprav text zadania</h2>
 
@@ -193,6 +280,13 @@
 
     const urlParams = new URLSearchParams(window.location.search);
     const projectPath = urlParams.get('project');
+    let isConfiguringProgram = false;
+    const configureBtn = document.getElementById('configureProgram');
+    const blockEditor   = document.getElementById('block-editor');
+    const palette       = document.getElementById('block-palette');
+    const programArea   = document.getElementById('program-area');
+    const dielnaBtn     = document.getElementById('dielna-btn');
+    const exitEditorBtn = document.getElementById('exit-editor-btn');
 
     async function loadProject() {
         if (projectPath) {
@@ -287,7 +381,15 @@
                     document.removeEventListener('mouseup', resizeUp);
                     saveProject();
                 }
-
+                const objId = e.currentTarget.dataset.id;
+                if (isConfiguringProgram) {
+                    selectedObjectId = objId;
+                    openProgramEditorForObject(objId);
+                    isConfiguringProgram = false;
+                    configureBtn.classList.remove('active');
+                    e.preventDefault();
+                    return;
+                }
                 document.addEventListener('mousemove', resizeMove);
                 document.addEventListener('mouseup', resizeUp);
             });
@@ -318,6 +420,66 @@
             scene.appendChild(container);
         });
     }
+    function openProgramEditorForObject(objId) {
+        const obj = project.objects.find(o => o.id === objId);
+        // clear & show editor
+        palette.querySelectorAll('.block-instance').forEach(n => n.remove());
+        programArea.innerHTML = '';
+        blockEditor.style.display = 'block';
+
+        // build palette: clone one block per allowed command
+        obj.availableBlocks.forEach(cmd => {
+            const blk = palette.querySelector(`[data-command="${cmd}"]`);
+            if (blk) {
+                const copy = blk.cloneNode(true);
+                copy.classList.add('block-instance');
+                copy.addEventListener('dragstart', handleDragStart);
+                programArea.parentNode.insertBefore(copy, dielnaBtn); // keep Dielňa at bottom
+            }
+        });
+
+        // fill program‐area with existing obj.blocks[]
+        obj.blocks.forEach(cmd => {
+            const blk = palette.querySelector(`[data-command="${cmd}"]`);
+            if (blk) {
+                const prog = blk.cloneNode(true);
+                prog.classList.add('block-instance');
+                prog.draggable = false;
+                programArea.appendChild(prog);
+            }
+        });
+
+        // hook exit and dielna
+        exitEditorBtn.onclick = () => {
+            // gather commands in programArea
+            obj.blocks = Array.from(programArea.children)
+                .filter(n => n.classList.contains('block-instance'))
+                .map(n => n.dataset.command);
+            saveProject();
+            blockEditor.style.display = 'none';
+        };
+        dielnaBtn.onclick = () => {
+            // toggle showing palette on right in lieu of program
+            programArea.style.display = programArea.style.display === 'none' ? 'block' : 'none';
+            palette.style.width = palette.style.width === '30%' ? '95%' : '30%';
+        };
+    }
+
+    // drag handlers (you can copy these from ziak.html too):
+    let dragging = null;
+    function handleDragStart(e) {
+        dragging = e.target;
+    }
+    palette.addEventListener('dragover', e => e.preventDefault());
+    programArea.addEventListener('dragover', e => e.preventDefault());
+    programArea.addEventListener('drop', e => {
+        if (!dragging) return;
+        const copy = dragging.cloneNode(true);
+        copy.classList.add('block-instance');
+        copy.draggable = false;
+        programArea.appendChild(copy);
+        dragging = null;
+    });
 
     function selectObject(id) {
         selectedObjectId = id;
@@ -388,7 +550,6 @@
                     if (!obj.costumes) obj.costumes = [obj.image];
                     obj.costumes.push(event.target.result);
                     saveProject();
-                    alert("Kostým pridaný.");
                 };
                 reader.readAsDataURL(file);
             }
@@ -463,17 +624,18 @@
     window.addEventListener("click", () => {
         document.getElementById("contextMenu").style.display = "none";
     });
-    document.getElementById('configureProgram').addEventListener('click', () => {
-        if (!selectedObjectId) return alert("Vyberte objekt, ktorý chcete programovať.");
-        const obj = project.objects.find(o => o.id === selectedObjectId);
-        const currentBlocks = obj.blocks.join(", ");
-        let input = prompt("Zadajte bloky oddelené čiarkou (napr. štart, dopredu, čakaj):", currentBlocks);
-        if (input !== null) {
-            obj.blocks = input.split(",").map(s => s.trim()).filter(s => s);
-            saveProject();
-            alert("Bloky boli aktualizované:\n" + obj.blocks.join(", "));
+    configureBtn.addEventListener('click', () => {
+        isConfiguringProgram = !isConfiguringProgram;
+        configureBtn.classList.toggle('active', isConfiguringProgram);
+
+        if (isConfiguringProgram) {
+            alert('Kliknite na objekt, ktorý chcete programovať.');
+        } else {
+            // cancelled: hide editor if open
+            blockEditor.style.display = 'none';
         }
     });
+
 
     document.getElementById('editText').addEventListener('click', () => {
         document.getElementById('titleInput').value = project.assignmentTitle || "";
@@ -517,7 +679,6 @@
 
             saveProject();
             renderTextPreview();
-            alert("Údaje o úlohe boli aktualizované.");
         }
         modal.style.display = 'none';
     }
