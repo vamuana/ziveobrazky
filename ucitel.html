@@ -26,6 +26,19 @@
             gap: 10px;
             align-items: center;
         }
+        #block-library {
+            background: #F5F5F5;        /* any light background */
+            width: 65%;
+            height: calc(100% - 2rem);
+            float: right;
+            overflow-y: auto;
+            padding: 0.5rem;
+        }
+        #block-library .block {
+            margin-bottom: 0.5rem;
+            cursor: grab;
+        }
+
         .handle {
             z-index: 10;
             border-radius: 50%;
@@ -224,17 +237,32 @@
     </div>
     <div id="block-editor">
         <h2>Programovanie objektu</h2>
+
+        <!-- left: student’s palette (starts empty) -->
         <div id="block-palette">
-            <!-- you can clone these from ziak.html too -->
-            <div class="block block-štart" draggable="true" data-command="štart">Štart</div>
-            <div class="block block-dopredu" draggable="true" data-command="dopredu">Dopredu</div>
-            <div class="block block-natoč" draggable="true" data-command="natoč">Natoč</div>
-            <!-- …and all your other block types… -->
             <button id="dielna-btn">Dielňa</button>
         </div>
+
+        <!-- middle: student’s pre‑written program -->
         <div id="program-area" ondragover="event.preventDefault()"></div>
+
+        <!-- right: teacher’s workshop (initially hidden) -->
+        <div id="block-library" ondragover="event.preventDefault()" style="display:none;">
+            <!-- paste here all your block prototypes, exactly as in ziak.html: -->
+            <div class="block" draggable="true" data-command="štart">Štart</div>
+            <div class="block" draggable="true" data-command="dopredu">Dopredu</div>
+            <div class="block" draggable="true" data-command="natoč">Natoč</div>
+            <div class="block" draggable="true" data-command="smerom">Smerom</div>
+            <div class="block" draggable="true" data-command="skoč na x,y">Skoč na X,Y</div>
+            <div class="block" draggable="true" data-command="čakaj">Čakaj</div>
+            <div class="block" draggable="true" data-command="opakuj stále">Opakuj stále</div>
+            <div class="block" draggable="true" data-command="zmeň kostým">Zmeň kostým</div>
+            <!-- …etc… -->
+        </div>
+
         <button id="exit-editor-btn">✔ Hotovo</button>
     </div>
+
 
     <div id="textEditorModal" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:#fff; border:2px solid #CCC; border-radius:12px; padding:20px; z-index:9999; box-shadow:0 4px 8px rgba(0,0,0,0.2); width:400px; max-width:90%;">
         <h2 style="margin-bottom: 10px;">Uprav text zadania</h2>
@@ -312,6 +340,35 @@
             objects: []
         };
     }
+    const blockLibrary  = document.getElementById('block-library');
+
+    // Re‑builds the left palette from obj.availableBlocks
+    function buildPalette(obj) {
+        // clear everything except the Dielňa button
+        Array.from(palette.querySelectorAll('.block-instance')).forEach(n => n.remove());
+
+        obj.availableBlocks.forEach(cmd => {
+            const blk = document.createElement('div');
+            blk.className     = 'block block-instance';
+            blk.textContent   = cmd.charAt(0).toUpperCase() + cmd.slice(1);
+            blk.dataset.command = cmd;
+            blk.draggable     = true;
+            blk.addEventListener('dragstart', handleDragStart);
+            palette.insertBefore(blk, dielnaBtn);
+        });
+    }
+
+    // Allow drops into the palette from the workshop
+    palette.addEventListener('dragover', e => e.preventDefault());
+    palette.addEventListener('drop', e => {
+        if (!dragging) return;
+        const cmd = dragging.dataset.command;
+        const obj = project.objects.find(o => o.id === selectedObjectId);
+        // add one more of that block to availableBlocks
+        obj.availableBlocks.push(cmd);
+        buildPalette(obj);
+        dragging = null;
+    });
 
     function saveProject() {
         localStorage.setItem("currentProject", JSON.stringify(project));
@@ -422,48 +479,44 @@
     }
     function openProgramEditorForObject(objId) {
         const obj = project.objects.find(o => o.id === objId);
-        // clear & show editor
-        palette.querySelectorAll('.block-instance').forEach(n => n.remove());
-        programArea.innerHTML = '';
+
+        // 1) Show the block‐editor
         blockEditor.style.display = 'block';
+        programArea.innerHTML = '';
+        blockLibrary.style.display = 'none';   // start out showing program, not workshop
 
-        // build palette: clone one block per allowed command
-        obj.availableBlocks.forEach(cmd => {
-            const blk = palette.querySelector(`[data-command="${cmd}"]`);
-            if (blk) {
-                const copy = blk.cloneNode(true);
-                copy.classList.add('block-instance');
-                copy.addEventListener('dragstart', handleDragStart);
-                programArea.parentNode.insertBefore(copy, dielnaBtn); // keep Dielňa at bottom
-            }
-        });
+        // 2) Build left palette from saved availableBlocks
+        buildPalette(obj);
 
-        // fill program‐area with existing obj.blocks[]
+        // 3) Fill the program area with any pre‑written blocks
         obj.blocks.forEach(cmd => {
-            const blk = palette.querySelector(`[data-command="${cmd}"]`);
-            if (blk) {
-                const prog = blk.cloneNode(true);
-                prog.classList.add('block-instance');
-                prog.draggable = false;
-                programArea.appendChild(prog);
-            }
+            const prog = document.createElement('div');
+            prog.className      = 'block block-instance';
+            prog.textContent    = cmd.charAt(0).toUpperCase() + cmd.slice(1);
+            prog.dataset.command = cmd;
+            prog.draggable      = false;
+            programArea.appendChild(prog);
         });
 
-        // hook exit and dielna
+        // 4) Hook the “Dielňa” button to show/hide the workshop
+        dielnaBtn.onclick = () => {
+            const showingLib = blockLibrary.style.display === 'block';
+            blockLibrary.style.display = showingLib ? 'none'  : 'block';
+            programArea.style.display = showingLib ? 'block' : 'none';
+        };
+
+        // 5) Hook the green ✔ to save both arrays and close
         exitEditorBtn.onclick = () => {
-            // gather commands in programArea
+            // save the student’s blocks
             obj.blocks = Array.from(programArea.children)
                 .filter(n => n.classList.contains('block-instance'))
                 .map(n => n.dataset.command);
+
             saveProject();
             blockEditor.style.display = 'none';
         };
-        dielnaBtn.onclick = () => {
-            // toggle showing palette on right in lieu of program
-            programArea.style.display = programArea.style.display === 'none' ? 'block' : 'none';
-            palette.style.width = palette.style.width === '30%' ? '95%' : '30%';
-        };
     }
+
 
     // drag handlers (you can copy these from ziak.html too):
     let dragging = null;
