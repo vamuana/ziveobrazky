@@ -235,8 +235,31 @@
     <div id="scene">
         <img id="sceneCanvas" alt="Background" />
     </div>
+    <!-- runtime controls -->
+    <div id="runtimeControls"
+         style="position:absolute; top:100px; right:20px; display:none; z-index:100;">
+        <button id="previewRun"
+                style="background:#4CAF50;color:#fff;
+                 padding:6px 12px;border:none;border-radius:4px;
+                 cursor:pointer;">
+            Spusti
+        </button>
+        <button id="previewStop"
+                style="background:#F44336;color:#fff;
+                 padding:6px 12px;border:none;border-radius:4px;
+                 cursor:pointer; display:none;">
+            Zastav
+        </button>
+    </div>
+
     <div id="block-editor">
         <h2>Programovanie objektu</h2>
+        <button id="close-editor-btn"
+                style="position:absolute; top:1rem; right:1rem;
+               background:none; border:none;
+               font-size:1.5rem; cursor:pointer;">
+            ✖
+        </button>
 
         <!-- left: student’s palette (starts empty) -->
         <div id="block-palette">
@@ -259,6 +282,7 @@
             <div class="block" draggable="true" data-command="zmeň kostým">Zmeň kostým</div>
             <!-- …etc… -->
         </div>
+
 
         <button id="exit-editor-btn">✔ Hotovo</button>
     </div>
@@ -343,20 +367,42 @@
     const blockLibrary  = document.getElementById('block-library');
 
     // Re‑builds the left palette from obj.availableBlocks
+    // ─── Replaces your existing buildPalette(obj) ───
     function buildPalette(obj) {
         // clear everything except the Dielňa button
         Array.from(palette.querySelectorAll('.block-instance')).forEach(n => n.remove());
 
-        obj.availableBlocks.forEach(cmd => {
+        // count how many of each command
+        const freq = obj.availableBlocks.reduce((acc, cmd) => {
+            acc[cmd] = (acc[cmd] || 0) + 1;
+            return acc;
+        }, {});
+
+        // for each unique command, make one block with a badge
+        Object.entries(freq).forEach(([cmd, count]) => {
             const blk = document.createElement('div');
-            blk.className     = 'block block-instance';
-            blk.textContent   = cmd.charAt(0).toUpperCase() + cmd.slice(1);
+            blk.className       = 'block block-instance';
             blk.dataset.command = cmd;
-            blk.draggable     = true;
+            blk.draggable       = true;
+            blk.textContent     = cmd.charAt(0).toUpperCase() + cmd.slice(1);
+
+            // badge
+            const badge = document.createElement('span');
+            badge.textContent      = count;
+            badge.style.cssText    = `
+      position:absolute; top:4px; right:8px;
+      background:#0288D1; color:#fff;
+      border-radius:50%; padding:2px 6px;
+      font-size:.75rem;
+    `;
+            blk.style.position = 'relative';
+            blk.appendChild(badge);
+
             blk.addEventListener('dragstart', handleDragStart);
             palette.insertBefore(blk, dielnaBtn);
         });
     }
+
 
     // Allow drops into the palette from the workshop
     palette.addEventListener('dragover', e => e.preventDefault());
@@ -365,6 +411,7 @@
         const cmd = dragging.dataset.command;
         const obj = project.objects.find(o => o.id === selectedObjectId);
         // add one more of that block to availableBlocks
+
         obj.availableBlocks.push(cmd);
         buildPalette(obj);
         dragging = null;
@@ -381,6 +428,7 @@
         canvas.src = project.background || "";
 
         project.objects.forEach(obj => {
+
             const container = document.createElement('div');
             container.className = 'object';
             container.style.left = obj.x + 'px';
@@ -406,10 +454,22 @@
             container.appendChild(rotateHandle);
 
             container.addEventListener('mousedown', startDrag);
-            container.addEventListener('click', (e) => {
+            container.addEventListener('click', e => {
                 e.stopPropagation();
+
+                // If we’re in “Programuj” mode, open the block editor
+                if (isConfiguringProgram) {
+                    selectedObjectId = obj.id;
+                    openProgramEditorForObject(obj.id);
+                    isConfiguringProgram = false;
+                    configureBtn.classList.remove('active');
+                    return;
+                }
+
+                // Otherwise just select the object
                 selectObject(obj.id);
             });
+
             container.addEventListener('contextmenu', (e) => {
                 e.preventDefault();
                 selectObject(obj.id);
@@ -480,6 +540,36 @@
     function openProgramEditorForObject(objId) {
         const obj = project.objects.find(o => o.id === objId);
 
+        // remember where it started
+        obj._origX     = obj.x;
+        obj._origY     = obj.y;
+        obj._origRot   = obj.rotation;
+        obj._origScale = obj.scale;
+
+
+
+// start button: hide editor & Run, show Stop, then execute
+        const runBtn      = document.getElementById('previewRun');
+        const stopBtn     = document.getElementById('previewStop');
+        const runtimeCtrls= document.getElementById('runtimeControls');
+
+        // start: hide editor, show runtime controls
+        runBtn.onclick = () => {
+            blockEditor.style.display   = 'none';
+            runtimeCtrls.style.display  = 'block';
+            runBlocksOnObject(obj, () => stopBtn.onclick());
+        };
+
+        // stop: reset & put editor back
+        stopBtn.onclick = () => {
+            resetObject(obj);
+            runtimeCtrls.style.display  = 'none';
+            blockEditor.style.display   = 'block';
+        };
+
+
+
+
         // 1) Show the block‐editor
         blockEditor.style.display = 'block';
         programArea.innerHTML = '';
@@ -487,16 +577,16 @@
 
         // 2) Build left palette from saved availableBlocks
         buildPalette(obj);
+// 3a) Fill the RIGHT‐hand area with any pre‑written “templateBlocks”
+            obj.blocks.forEach(cmd => {
+                  const prog = document.createElement('div');
+                  prog.className       = 'block block-instance';
+            prog.textContent     = cmd.charAt(0).toUpperCase() + cmd.slice(1);
+                  prog.dataset.command = cmd;
+                  prog.draggable       = false;
+                  programArea.appendChild(prog);
+                });
 
-        // 3) Fill the program area with any pre‑written blocks
-        obj.blocks.forEach(cmd => {
-            const prog = document.createElement('div');
-            prog.className      = 'block block-instance';
-            prog.textContent    = cmd.charAt(0).toUpperCase() + cmd.slice(1);
-            prog.dataset.command = cmd;
-            prog.draggable      = false;
-            programArea.appendChild(prog);
-        });
 
         // 4) Hook the “Dielňa” button to show/hide the workshop
         dielnaBtn.onclick = () => {
@@ -507,32 +597,99 @@
 
         // 5) Hook the green ✔ to save both arrays and close
         exitEditorBtn.onclick = () => {
-            // save the student’s blocks
             obj.blocks = Array.from(programArea.children)
-                .filter(n => n.classList.contains('block-instance'))
                 .map(n => n.dataset.command);
-
             saveProject();
             blockEditor.style.display = 'none';
         };
+
     }
 
 
     // drag handlers (you can copy these from ziak.html too):
+    // after
     let dragging = null;
-    function handleDragStart(e) {
-        dragging = e.target;
+    // ─── Stub out the “interpreter” ───
+    function executeCommands(obj, commands, onComplete) {
+        // store a simple index
+        let i = 0;
+        function step() {
+            if (i === commands.length) {
+                if (onComplete) onComplete();
+                return;
+            }
+            const cmd = commands[i++];
+            switch (cmd) {
+                case 'dopredu':
+                    obj.x += 20;
+                    break;
+                case 'natoč':
+                    obj.rotation += 30;
+                    break;
+                case 'smerom':
+                    // example: jump right
+                    obj.x += 50;
+                    break;
+                case 'skoč na x,y':
+                    obj.x +=  0; obj.y -= 50;
+                    break;
+                case 'čakaj':
+                    // do nothing
+                    break;
+                // …add more cases as you implement them…
+            }
+            renderScene();
+            // schedule next step:
+            setTimeout(step, 300);
+        }
+        step();
     }
+
+    function runBlocksOnObject(o, onComplete) {
+        // e.g. iterate through o.blocks with timeouts or animation...
+        executeCommands(o, o.blocks, onComplete);
+    }
+
+    function resetObject(o) {
+        // your “zastav” logic for a single object
+        o.x = o._origX;  o.y = o._origY;
+        o.rotation = o._origRot;  o.scale = o._origScale;
+        renderScene();
+    }
+
+    function handleDragStart(e) { dragging = e.target; }
+    // and after you do:
     palette.addEventListener('dragover', e => e.preventDefault());
     programArea.addEventListener('dragover', e => e.preventDefault());
+    // ─── Replace your programArea “drop” listener with this ───
     programArea.addEventListener('drop', e => {
+        e.preventDefault();
         if (!dragging) return;
+
+        const cmd = dragging.dataset.command;
+        const obj = project.objects.find(o => o.id === selectedObjectId);
+
+        // if it came from the teacher‐palette, consume one copy
+        if (dragging.classList.contains('block-instance') && obj.availableBlocks.includes(cmd)) {
+            // remove a single occurrence
+            obj.availableBlocks.splice(obj.availableBlocks.indexOf(cmd), 1);
+            buildPalette(obj);
+            saveProject();
+        }
+
+        // always append the block into the student's program
         const copy = dragging.cloneNode(true);
         copy.classList.add('block-instance');
         copy.draggable = false;
         programArea.appendChild(copy);
+
         dragging = null;
     });
+
+
+    document.querySelectorAll('#block-library .block')
+        .forEach(blockEl => blockEl.addEventListener('dragstart', handleDragStart));
+
 
     function selectObject(id) {
         selectedObjectId = id;
@@ -632,12 +789,13 @@
                 const newObj = {
                     id: Date.now().toString(),
                     image: evt.target.result,
-                    x: 50,
-                    y: 50,
+                    x: 50, y: 50,
                     rotation: 0,
                     scale: 1,
-                    blocks: []
+                    blocks: [],              // student’s pre‑written program
+                    availableBlocks: []      // teacher’s palette inventory
                 };
+
                 project.objects.push(newObj);
                 saveProject();
                 renderScene();
@@ -827,6 +985,11 @@
         });
     });
 
+    document.getElementById('close-editor-btn').onclick = () => {
+        blockEditor.style.display = 'none';
+        isConfiguringProgram = false;
+        configureBtn.classList.remove('active');
+    };
 
 
     document.getElementById('transformObject').addEventListener('click', () => {
@@ -842,8 +1005,17 @@
 
     loadProject().then(p => {
         project = p;
+
+        // ── make sure each object has our new field ──
+        project.objects.forEach(o => {
+            if (!Array.isArray(o.availableBlocks)) {
+                o.availableBlocks = [];
+            }
+        });
+
         renderScene();
     });
+
 </script>
 </body>
 </html>
