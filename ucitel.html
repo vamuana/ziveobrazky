@@ -99,6 +99,32 @@
             margin-bottom: 0.5rem;
             font-size: 1.2rem;
         }
+        /* ========================================================================
+   BLOCK STYLING
+   ======================================================================== */
+        #block-palette .block,
+        #program-area .block {
+            background: #fff;
+            border: 2px solid #0288D1;
+            border-radius: 12px;
+            padding: 8px 12px;
+            margin-bottom: 8px;
+            font-family: Arial, sans-serif;
+            font-size: 0.95rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            cursor: grab;
+            position: relative;
+            transition: background 0.2s, transform 0.1s;
+        }
+        #block-palette .block:hover,
+        #program-area .block:hover {
+            background: #E0F7FA;
+            transform: translateY(-2px);
+        }
+        #program-area .block {
+            cursor: default; /* they’re no longer draggable once in the program */
+        }
+
         #block-palette {
             background: #E0F7FA;       /* pale blue */
             width: 30%;
@@ -238,12 +264,6 @@
     <!-- runtime controls -->
     <div id="runtimeControls"
          style="position:absolute; top:100px; right:20px; display:none; z-index:100;">
-        <button id="previewRun"
-                style="background:#4CAF50;color:#fff;
-                 padding:6px 12px;border:none;border-radius:4px;
-                 cursor:pointer;">
-            Spusti
-        </button>
         <button id="previewStop"
                 style="background:#F44336;color:#fff;
                  padding:6px 12px;border:none;border-radius:4px;
@@ -254,6 +274,16 @@
 
     <div id="block-editor">
         <h2>Programovanie objektu</h2>
+        <!-- at the top of your block‑editor, e.g. right under the <h2> -->
+        <div style="position:absolute; top:1rem; right:4rem; z‑index:60;">
+            <button id="editorRun"
+                    style="background:#4CAF50;color:#fff;
+                   padding:6px 12px;border:none;border-radius:4px;
+                   cursor:pointer;">
+                Spusti
+            </button>
+        </div>
+
         <button id="close-editor-btn"
                 style="position:absolute; top:1rem; right:1rem;
                background:none; border:none;
@@ -398,7 +428,8 @@
             blk.style.position = 'relative';
             blk.appendChild(badge);
 
-            blk.addEventListener('dragstart', handleDragStart);
+            blk.addEventListener('dragstart', onBlockDragStart);
+            blk.addEventListener('dragend',   onBlockDragEnd);
             palette.insertBefore(blk, dielnaBtn);
         });
     }
@@ -548,24 +579,38 @@
 
 
 
-// start button: hide editor & Run, show Stop, then execute
-        const runBtn      = document.getElementById('previewRun');
-        const stopBtn     = document.getElementById('previewStop');
-        const runtimeCtrls= document.getElementById('runtimeControls');
+        const editorRun       = document.getElementById('editorRun');
+        const previewStop     = document.getElementById('previewStop');
+        const runtimeControls = document.getElementById('runtimeControls');
 
-        // start: hide editor, show runtime controls
-        runBtn.onclick = () => {
-            blockEditor.style.display   = 'none';
-            runtimeCtrls.style.display  = 'block';
-            runBlocksOnObject(obj, () => stopBtn.onclick());
-        };
 
-        // stop: reset & put editor back
-        stopBtn.onclick = () => {
+        previewStop.onclick = () => {
+            // reset the object
             resetObject(obj);
-            runtimeCtrls.style.display  = 'none';
-            blockEditor.style.display   = 'block';
+
+            // hide the stop button
+            runtimeControls.style.display = 'none';
+            previewStop.style.display     = 'none';
+
+            // re‑open the editor with Spusti visible again
+            blockEditor.style.display = 'block';
+            editorRun.style.display   = 'inline-block';
         };
+
+
+        editorRun.onclick = () => {
+            // close the popup...
+            blockEditor.style.display   = 'none';
+            // ...and show only the Zastav button
+            runtimeControls.style.display = 'block';
+            previewStop.style.display     = 'inline-block';
+
+            runBlocksOnObject(obj, () => {
+                // when finished, pretend they hit Zastav:
+                previewStop.onclick();
+            });
+        };
+
 
 
 
@@ -594,6 +639,7 @@
             blockLibrary.style.display = showingLib ? 'none'  : 'block';
             programArea.style.display = showingLib ? 'block' : 'none';
         };
+
 
         // 5) Hook the green ✔ to save both arrays and close
         exitEditorBtn.onclick = () => {
@@ -684,6 +730,23 @@
         programArea.appendChild(copy);
 
         dragging = null;
+    });
+    // remove a block from the student program on double‑click
+    programArea.addEventListener('dblclick', e => {
+        const blk = e.target.closest('.block-instance');
+        if (!blk) return;
+
+        // remove from the DOM
+        const cmd = blk.dataset.command;
+        blk.remove();
+
+        // also give that block back to the teacher's palette
+        const obj = project.objects.find(o => o.id === selectedObjectId);
+        if (obj) {
+            obj.availableBlocks.push(cmd);
+            buildPalette(obj);
+            saveProject();
+        }
     });
 
 
@@ -986,6 +1049,9 @@
     });
 
     document.getElementById('close-editor-btn').onclick = () => {
+        runtimeControls.style.display = 'none';
+        previewStop.style.display     = 'none';
+
         blockEditor.style.display = 'none';
         isConfiguringProgram = false;
         configureBtn.classList.remove('active');
@@ -1015,7 +1081,56 @@
 
         renderScene();
     });
+    let draggedBlock = null;
 
+    // Called on dragstart
+    function onBlockDragStart(e) {
+        draggedBlock = e.currentTarget;
+        e.currentTarget.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+    }
+    function onBlockDragEnd(e) {
+        e.currentTarget.classList.remove('dragging');
+        draggedBlock = null;
+        persistBlockOrder();         // save into project.objects[selected].blocks
+    }
+
+    // Given a container and a Y‑coordinate, find the block we're hovering above
+    function getDragAfterElement(container, y) {
+        const draggableElements = [...container.querySelectorAll('.block-instance:not(.dragging)')];
+        return draggableElements.reduce((closest, child) => {
+            const box = child.getBoundingClientRect();
+            const offset = y - box.top - box.height / 2;
+            if (offset < 0 && offset > closest.offset) {
+                return { offset, element: child };
+            }
+            return closest;
+        }, { offset: Number.NEGATIVE_INFINITY }).element;
+    }
+
+    // After you finish a drop, rewrite obj.blocks from the DOM order
+    function persistBlockOrder() {
+        if (!selectedObjectId) return;
+        const obj = project.objects.find(o => o.id === selectedObjectId);
+        obj.blocks = Array.from(programArea.querySelectorAll('.block-instance'))
+            .map(n => n.dataset.command);
+        saveProject();
+    }
+    [ programArea, palette ].forEach(container => {
+        container.addEventListener('dragover', e => {
+            e.preventDefault();
+            const after = getDragAfterElement(container, e.clientY);
+            if (draggedBlock) {
+                if (after == null) container.appendChild(draggedBlock);
+                else container.insertBefore(draggedBlock, after);
+            }
+        });
+        container.addEventListener('drop', e => {
+            e.preventDefault();
+            // drop is complete—persist only if it was in the program area
+            if (container === programArea) persistBlockOrder();
+        });
+    });
 </script>
 </body>
 </html>
