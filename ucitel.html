@@ -399,37 +399,39 @@
     // Re‑builds the left palette from obj.availableBlocks
     // ─── Replaces your existing buildPalette(obj) ───
     function buildPalette(obj) {
-        // clear everything except the Dielňa button
+        // Clear all previous blocks
         Array.from(palette.querySelectorAll('.block-instance')).forEach(n => n.remove());
 
-        // count how many of each command
         const freq = obj.availableBlocks.reduce((acc, cmd) => {
             acc[cmd] = (acc[cmd] || 0) + 1;
             return acc;
         }, {});
 
-        // for each unique command, make one block with a badge
         Object.entries(freq).forEach(([cmd, count]) => {
             const blk = document.createElement('div');
-            blk.className       = 'block block-instance';
+            blk.className = 'block block-instance';
             blk.dataset.command = cmd;
-            blk.draggable       = true;
-            blk.textContent     = cmd.charAt(0).toUpperCase() + cmd.slice(1);
+            blk.draggable = true;
+            blk.textContent = cmd.charAt(0).toUpperCase() + cmd.slice(1);
 
-            // badge
             const badge = document.createElement('span');
-            badge.textContent      = count;
-            badge.style.cssText    = `
-      position:absolute; top:4px; right:8px;
-      background:#0288D1; color:#fff;
-      border-radius:50%; padding:2px 6px;
-      font-size:.75rem;
-    `;
+            badge.textContent = count;
+            badge.style.cssText = `
+            position: absolute;
+            top: 4px;
+            right: 8px;
+            background: #0288D1;
+            color: white;
+            border-radius: 50%;
+            padding: 2px 6px;
+            font-size: 0.75rem;
+        `;
             blk.style.position = 'relative';
             blk.appendChild(badge);
 
             blk.addEventListener('dragstart', onBlockDragStart);
-            blk.addEventListener('dragend',   onBlockDragEnd);
+            blk.addEventListener('dragend', onBlockDragEnd);
+
             palette.insertBefore(blk, dielnaBtn);
         });
     }
@@ -438,15 +440,21 @@
     // Allow drops into the palette from the workshop
     palette.addEventListener('dragover', e => e.preventDefault());
     palette.addEventListener('drop', e => {
-        if (!dragging) return;
-        const cmd = dragging.dataset.command;
-        const obj = project.objects.find(o => o.id === selectedObjectId);
-        // add one more of that block to availableBlocks
+        e.preventDefault();
+        if (!draggedBlock) return;
 
+        const cmd = draggedBlock.dataset.command;
+        const obj = project.objects.find(o => o.id === selectedObjectId);
+
+        // Add the command to availableBlocks
         obj.availableBlocks.push(cmd);
+
+        // Refresh the palette to update count
         buildPalette(obj);
-        dragging = null;
+
+        draggedBlock = null;
     });
+
 
     function saveProject() {
         localStorage.setItem("currentProject", JSON.stringify(project));
@@ -617,21 +625,24 @@
 
         // 1) Show the block‐editor
         blockEditor.style.display = 'block';
-        programArea.innerHTML = '';
+
         blockLibrary.style.display = 'none';   // start out showing program, not workshop
 
         // 2) Build left palette from saved availableBlocks
         buildPalette(obj);
-// 3a) Fill the RIGHT‐hand area with any pre‑written “templateBlocks”
+// 3a) Only seed templates the first time we open this object
+        if (!programArea.querySelector('.block-instance')) {
             obj.blocks.forEach(cmd => {
-                  const prog = document.createElement('div');
-                  prog.className       = 'block block-instance';
-            prog.textContent     = cmd.charAt(0).toUpperCase() + cmd.slice(1);
-                  prog.dataset.command = cmd;
-                  prog.draggable       = false;
-                  programArea.appendChild(prog);
-                });
-
+                const prog = document.createElement('div');
+                prog.className       = 'block block-instance';
+                prog.textContent     = cmd.charAt(0).toUpperCase() + cmd.slice(1);
+                prog.dataset.command = cmd;
+                prog.draggable       = true;
+                prog.addEventListener('dragstart', onBlockDragStart);
+                prog.addEventListener('dragend',   onBlockDragEnd);
+                programArea.appendChild(prog);
+            });
+        }
 
         // 4) Hook the “Dielňa” button to show/hide the workshop
         dielnaBtn.onclick = () => {
@@ -708,29 +719,60 @@
     palette.addEventListener('dragover', e => e.preventDefault());
     programArea.addEventListener('dragover', e => e.preventDefault());
     // ─── Replace your programArea “drop” listener with this ───
+    // ─── 1) New dragstart: shove exactly one command into dataTransfer ───
+    function onBlockDragStart(e) {
+        e.dataTransfer.setData('text/plain', e.currentTarget.dataset.command);
+        e.dataTransfer.effectAllowed = 'move';
+    }
+
+    // (Reattach to your palette blocks if needed)
+    // document.querySelectorAll('#block-palette .block-instance')
+    //   .forEach(el => el.addEventListener('dragstart', onBlockDragStart));
+
+
+    // ─── 2) Drop into the program area: pull exactly one copy ───
+    programArea.addEventListener('dragover', e => e.preventDefault());
     programArea.addEventListener('drop', e => {
         e.preventDefault();
-        if (!dragging) return;
 
-        const cmd = dragging.dataset.command;
+        // 2a) read the single command
+        const cmd = e.dataTransfer.getData('text/plain');
+        if (!cmd) return;
+
+        // 2b) find the object we’re programming
         const obj = project.objects.find(o => o.id === selectedObjectId);
+        if (!obj) return;
 
-        // if it came from the teacher‐palette, consume one copy
-        if (dragging.classList.contains('block-instance') && obj.availableBlocks.includes(cmd)) {
-            // remove a single occurrence
-            obj.availableBlocks.splice(obj.availableBlocks.indexOf(cmd), 1);
-            buildPalette(obj);
-            saveProject();
+        // 2c) remove exactly one from the teacher’s inventory
+        const idx = obj.availableBlocks.indexOf(cmd);
+        if (idx === -1) {
+            alert(`Nie je dostupný ďalší blok: ${cmd}`);
+            return;
         }
+        obj.availableBlocks.splice(idx, 1);
+        saveProject();
 
-        // always append the block into the student's program
-        const copy = dragging.cloneNode(true);
-        copy.classList.add('block-instance');
-        copy.draggable = false;
-        programArea.appendChild(copy);
+        // 2d) rebuild the palette badges
+        buildPalette(obj);
 
-        dragging = null;
+        // 2e) append one fresh block to the student’s program
+        const newBlock = document.createElement('div');
+        newBlock.className       = 'block block-instance';
+        newBlock.textContent     = cmd.charAt(0).toUpperCase() + cmd.slice(1);
+        newBlock.dataset.command = cmd;
+        newBlock.draggable       = true;
+        newBlock.addEventListener('dragstart', onBlockDragStart);
+        newBlock.addEventListener('dragend',   onBlockDragEnd);
+        programArea.appendChild(newBlock);
+
+        // 2f) persist and save
+        persistBlockOrder();
+        saveProject();
     });
+
+
+
+
     // remove a block from the student program on double‑click
     programArea.addEventListener('dblclick', e => {
         const blk = e.target.closest('.block-instance');
@@ -749,9 +791,9 @@
         }
     });
 
-
+    // ✅ correct
     document.querySelectorAll('#block-library .block')
-        .forEach(blockEl => blockEl.addEventListener('dragstart', handleDragStart));
+        .forEach(blockEl => blockEl.addEventListener('dragstart', onBlockDragStart));
 
 
     function selectObject(id) {
@@ -1089,11 +1131,12 @@
         e.currentTarget.classList.add('dragging');
         e.dataTransfer.effectAllowed = 'move';
     }
+
     function onBlockDragEnd(e) {
         e.currentTarget.classList.remove('dragging');
         draggedBlock = null;
-        persistBlockOrder();         // save into project.objects[selected].blocks
     }
+
 
     // Given a container and a Y‑coordinate, find the block we're hovering above
     function getDragAfterElement(container, y) {
@@ -1116,21 +1159,17 @@
             .map(n => n.dataset.command);
         saveProject();
     }
-    [ programArea, palette ].forEach(container => {
-        container.addEventListener('dragover', e => {
-            e.preventDefault();
-            const after = getDragAfterElement(container, e.clientY);
-            if (draggedBlock) {
-                if (after == null) container.appendChild(draggedBlock);
-                else container.insertBefore(draggedBlock, after);
-            }
-        });
-        container.addEventListener('drop', e => {
-            e.preventDefault();
-            // drop is complete—persist only if it was in the program area
-            if (container === programArea) persistBlockOrder();
-        });
+    // 3) Only allow reordering inside the program area:
+    programArea.addEventListener('dragover', e => {
+        e.preventDefault();
+        const after = getDragAfterElement(programArea, e.clientY);
+        if (draggedBlock) {
+            if (!after) programArea.appendChild(draggedBlock);
+            else        programArea.insertBefore(draggedBlock, after);
+        }
     });
+
+
 </script>
 </body>
 </html>
