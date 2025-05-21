@@ -133,46 +133,265 @@
 
 <script>
     const slides = document.querySelectorAll('.slide');
+
     let currentIndex = 0;
 
-    positionSlides();
-
     function nextSlide() {
+        const slides = document.querySelectorAll('.slide');
         currentIndex = (currentIndex + 1) % slides.length;
         positionSlides();
     }
+
     function prevSlide() {
+        const slides = document.querySelectorAll('.slide');
         currentIndex = (currentIndex - 1 + slides.length) % slides.length;
         positionSlides();
     }
 
     function positionSlides() {
+        const slides = document.querySelectorAll('.slide');
         slides.forEach((slide, i) => {
             let rawOffset = (i - currentIndex + slides.length) % slides.length;
-            if (rawOffset > slides.length / 2) {
-                rawOffset = rawOffset - slides.length;
-            }
+            if (rawOffset > slides.length / 2) rawOffset -= slides.length;
 
-            let offsetFactor = 90;
-            let tiltFactor = 15;
+            const offsetFactor = 90;
+            const tiltFactor = 15;
 
-            let translateX = rawOffset * offsetFactor;
-            let rotateY = rawOffset * tiltFactor;
-            let zIndex = -Math.abs(rawOffset);
-
-            let scale = Math.max(0.7, 1 - Math.abs(rawOffset) * 0.1);
-            let opacity = Math.max(0.3, 1 - Math.abs(rawOffset) * 0.2);
+            const translateX = rawOffset * offsetFactor;
+            const rotateY = rawOffset * tiltFactor;
+            const zIndex = -Math.abs(rawOffset);
+            const scale = Math.max(0.7, 1 - Math.abs(rawOffset) * 0.1);
+            const opacity = Math.max(0.3, 1 - Math.abs(rawOffset) * 0.2);
 
             slide.style.zIndex = zIndex;
             slide.style.opacity = opacity.toString();
             slide.style.transform = `
-                translate(-50%, -50%)
-                translateX(${translateX}%)
-                rotateY(${rotateY}deg)
-                scale(${scale})
-            `;
+            translate(-50%, -50%)
+            translateX(${translateX}%)
+            rotateY(${rotateY}deg)
+            scale(${scale})
+        `;
+        });
+        positionSlides();
+
+    }
+</script>
+<input type="file" id="student-upload" accept=".zip" style="display:none" />
+<button onclick="document.getElementById('student-upload').click()" style="position:absolute; top:20px; right:20px; font-size:1rem; padding:10px 16px; border-radius:10px; background:#ffc6db; border:none; cursor:pointer;">📁 Nahrať hru</button>
+<canvas id="thumbCanvas" width="400" height="400" style="display:none;"></canvas>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.0/jszip.min.js"></script>
+
+<script>
+    const studentKey = 'studentProjects';
+
+    function loadStudentProjects() {
+        return JSON.parse(localStorage.getItem(studentKey)) || [];
+    }
+    function saveStudentProjects(projects) {
+        localStorage.setItem(studentKey, JSON.stringify(projects));
+    }
+
+    function createSlide(game, index, isRemovable = false) {
+        const slide = document.createElement('div');
+        slide.className = 'slide';
+
+        slide.onclick = () => {
+            if (game.projectData) {
+                // For uploaded games
+                localStorage.setItem("currentProject", JSON.stringify(game.projectData));
+                location.href = 'ziak.html';
+            } else if (game.projectFile) {
+                // For default games
+                fetch(game.projectFile)
+                    .then(res => res.json())
+                    .then(data => {
+                        localStorage.setItem("currentProject", JSON.stringify(data));
+                        location.href = 'ziak.html';
+                    })
+                    .catch(err => {
+                        alert("Nepodarilo sa načítať projekt.");
+                        console.error(err);
+                    });
+            }
+        };
+        const thumbDiv = document.createElement('div');
+        thumbDiv.className = 'thumbnail';
+        thumbDiv.style.background = `url('${game.thumbnail}') center/cover no-repeat`;
+        slide.appendChild(thumbDiv);
+
+        const title = document.createElement('h2');
+        title.textContent = game.title || "Projekt";
+        slide.appendChild(title);
+
+        const desc = document.createElement('p');
+        desc.textContent = game.task || "";
+        slide.appendChild(desc);
+
+        if (isRemovable) {
+            const btn = document.createElement('button');
+            btn.textContent = "🗑️";
+            btn.style.cssText = "position:absolute;top:5px;right:5px;background:#fff3;border:none;border-radius:6px;padding:4px;cursor:pointer";
+            btn.onclick = (e) => {
+                e.stopPropagation();
+                const projects = loadStudentProjects();
+                projects.splice(index, 1);
+                saveStudentProjects(projects);
+                location.reload();
+            };
+            slide.appendChild(btn);
+        }
+
+        return slide;
+    }
+
+    function renderAllSlides() {
+        const slidesContainer = document.getElementById('slides');
+        slidesContainer.innerHTML = '';
+
+        // Defaults
+        const defaultGames = [
+            {
+                title: 'Škrečkoland',
+                task: 'Zaveď škrečka Tušíka k domčeku.',
+                thumbnail: './hamster_village/hamstervillage.png',
+                projectFile: 'hamster_village/defaultProject.json'
+            },
+            {
+                title: 'Podvodný svet',
+                task: 'Popis hry 2',
+                thumbnail: './underwater/underwater.png',
+                projectFile: 'underwater/project1.json'
+            },
+            {
+                title: 'Nebeské dobrodružstvo',
+                task: 'Popis hry 3',
+                thumbnail: './sky/sky.png',
+                projectFile: 'sky/project1.json'
+            }
+        ];
+
+        defaultGames.forEach(game => {
+            const slide = createSlide(game);
+            slide.onclick = () => {
+                fetch(game.projectFile)
+                    .then(res => res.json())
+                    .then(data => {
+                        localStorage.setItem("currentProject", JSON.stringify(data));
+                        location.href = 'ziak.html';
+                    });
+            };
+            slidesContainer.appendChild(slide);
+        });
+
+        const uploaded = loadStudentProjects();
+        uploaded.forEach((game, i) => {
+            const slide = createSlide(game, i, true);
+            slidesContainer.appendChild(slide);
+        });
+
+        // Refresh positions
+        setTimeout(() => {
+            currentIndex = 0;
+            positionSlides();
+        }, 100);
+    }
+
+    async function generateThumbnail(project, size = 400) {
+        const canvas = document.getElementById('thumbCanvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = canvas.height = size;
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, size, size);
+
+        if (project.background) {
+            const bg = await loadImage(project.background);
+            ctx.drawImage(bg, 0, 0, size, size);
+        }
+
+        for (const obj of project.objects) {
+            if (!obj.image) continue;
+            const img = await loadImage(obj.image);
+            const x = obj.x || 0;
+            const y = obj.y || 0;
+            const scale = obj.scale || 1;
+            const rot = (obj.rotation || 0) * Math.PI / 180;
+            const sz = 100 * scale;
+
+            ctx.save();
+            ctx.translate(x + sz/2, y + sz/2);
+            ctx.rotate(rot);
+            ctx.drawImage(img, -sz/2, -sz/2, sz, sz);
+            ctx.restore();
+        }
+
+        return canvas.toDataURL("image/png");
+    }
+
+    function loadImage(src) {
+        return new Promise((resolve, reject) => {
+            const img = new Image();
+            img.onload = () => resolve(img);
+            img.onerror = reject;
+            img.src = src;
         });
     }
+
+    document.getElementById('student-upload').addEventListener('change', async e => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        try {
+            const zip = await JSZip.loadAsync(file);
+            const jsonEntry = Object.keys(zip.files).find(name => name.toLowerCase().includes('projekt.json'));
+            if (!jsonEntry) return alert("ZIP súbor neobsahuje 'projekt.json'.");
+
+            const jsonData = await zip.file(jsonEntry).async("string");
+            const project = JSON.parse(jsonData);
+
+            const bgName = project.background?.split('/').pop();
+            if (bgName && zip.file(`images/${bgName}`)) {
+                const blob = await zip.file(`images/${bgName}`).async("blob");
+                project.background = URL.createObjectURL(blob);
+            }
+
+            for (const obj of project.objects) {
+                const fileName = obj.image?.split('/').pop();
+                if (fileName && zip.file(`images/${fileName}`)) {
+                    const blob = await zip.file(`images/${fileName}`).async("blob");
+                    obj.image = URL.createObjectURL(blob);
+                }
+
+                if (Array.isArray(obj.costumes)) {
+                    for (let i = 0; i < obj.costumes.length; i++) {
+                        const costumeName = obj.costumes[i]?.split('/').pop();
+                        if (costumeName && zip.file(`images/${costumeName}`)) {
+                            const blob = await zip.file(`images/${costumeName}`).async("blob");
+                            obj.costumes[i] = URL.createObjectURL(blob);
+                        }
+                    }
+                }
+            }
+
+            const thumbnail = await generateThumbnail(project);
+            const game = {
+                title: project.assignmentTitle,
+                task: project.assignmentDescription,
+                thumbnail,
+                projectData: project
+            };
+
+            const uploaded = loadStudentProjects();
+            uploaded.push(game);
+            saveStudentProjects(uploaded);
+            renderAllSlides();
+        } catch (err) {
+            console.error(err);
+            alert("Nepodarilo sa načítať ZIP.");
+        }
+    });
+
+    renderAllSlides();
 </script>
 
 </body>

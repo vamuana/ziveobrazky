@@ -38,6 +38,12 @@
             margin-bottom: 0.5rem;
             cursor: grab;
         }
+        .block-children {
+            padding-left: 20px;
+            border-left: 2px dashed #ccc;
+            margin-top: 6px;
+        }
+
 
         .handle {
             z-index: 10;
@@ -66,6 +72,11 @@
             transform: translateX(-50%);
             cursor: grab;
         }
+        #program-area .block {
+            position: relative; /* Required so ::after is positioned relative to the block */
+            margin-bottom: 12px; /* Creates enough room for the triangle */
+        }
+
         header button {
             background: #B7F5F4;
             border: 2px solid #FFF4B5;
@@ -102,27 +113,74 @@
         /* ========================================================================
    BLOCK STYLING
    ======================================================================== */
-        #block-palette .block,
-        #program-area .block {
-            background: #fff;
-            border: 2px solid #0288D1;
-            border-radius: 12px;
-            padding: 8px 12px;
-            margin-bottom: 8px;
-            font-family: Arial, sans-serif;
-            font-size: 0.95rem;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            cursor: grab;
-            position: relative;
-            transition: background 0.2s, transform 0.1s;
-        }
+
         #block-palette .block:hover,
         #program-area .block:hover {
             background: #E0F7FA;
             transform: translateY(-2px);
         }
-        #program-area .block {
-            cursor: default; /* they’re no longer draggable once in the program */
+
+        #program-area .block::after {
+            content: "";
+            position: absolute;
+            left: 50%;
+            bottom: 0;
+            transform: translate(-50%, 100%);
+            width: 14px;
+            height: 8px;
+            background: inherit;
+            clip-path: polygon(0 0, 100% 0, 50% 100%);
+        }
+        #program-area .block + .block {
+            margin-top: -1px;
+        }
+
+
+
+        .block[data-command="opakuj"] input.block-param {
+            background: white;
+            color: black;
+            font-weight: bold;
+            border: none;
+            text-align: center;
+            margin-left: 6px;
+            border-radius: 6px;
+        }
+        .block[data-command="opakuj"] .block-children {
+            background: #ffe5b4;
+            margin-top: 8px;
+            padding: 10px;
+            border-radius: 8px;
+            min-height: 40px;
+            transition: all 0.2s ease;
+        }
+
+        #program-area .block:last-child::after {
+            display: none;
+        }
+        .block {
+            color: #fff;
+            padding: 10px;
+            font-size: 0.95rem;
+            font-weight: bold;
+            text-align: center;
+            cursor: grab;
+            transition: transform 0.2s ease;
+            box-shadow: 0 3px 6px rgba(0,0,0,0.2);
+            border-radius: 6px;
+            user-select: none;
+        }
+
+        .block:hover {
+            transform: translateY(-2px);
+        }
+        .block[data-command="opakuj stále"] .block-children {
+            background: #fff3cd;
+            margin-top: 8px;
+            padding: 10px;
+            border-radius: 8px;
+            min-height: 40px;
+            transition: all 0.2s ease;
         }
 
         #block-palette {
@@ -134,6 +192,17 @@
             padding: 0.5rem;
             position: relative;
         }
+        /* Specific block types */
+        .block[data-command="štart"]        { background: #87CEEB !important; }
+        .block[data-command="dopredu"]      { background: #FFB6C1 !important; }
+        .block[data-command="natoč"]        { background: #F0E68C !important; }
+        .block[data-command="smerom"]       { background: #febe7f !important; }
+
+        .block[data-command="čakaj"]        { background: #98FB98 !important; }
+        .block[data-command="opakuj stále"] { background: #fcb769 !important; }
+        .block[data-command="zmeň kostým"]  { background: #78b5f9 !important; }
+        .block[data-command="opakuj"]  { background: #B2A5FF !important; }
+
         #block-palette .block {
             margin-bottom: 0.5rem;
             cursor: grab;
@@ -177,6 +246,15 @@
         button#configureProgram.active {
             background: #1976D2;
             color: #fff;
+        }
+        .block-param {
+            width: 40px;
+            margin-left: 5px;
+            font-weight: bold;
+            font-size: 0.9rem;
+            border-radius: 4px;
+            border: none;
+            padding: 2px 4px;
         }
 
         #scene {
@@ -223,6 +301,39 @@
             font-size: 0.95rem;
             cursor: pointer;
         }
+        .program-dropdown {
+            display: none;
+            position: absolute;
+            background: white;
+            border: 2px solid #ccc;
+            border-radius: 8px;
+            padding: 10px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+            z-index: 100;
+            top: 100%;
+            left: 0;
+            min-width: 180px;
+        }
+
+        .program-dropdown .item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 6px;
+            cursor: pointer;
+            padding: 4px;
+            border-radius: 6px;
+            transition: background 0.2s ease;
+        }
+        .program-dropdown .item:hover {
+            background: #e0f7fa;
+        }
+        .program-dropdown .item img {
+            width: 40px;
+            height: 40px;
+            margin-right: 10px;
+            border-radius: 6px;
+            object-fit: contain;
+        }
         .context-menu button:hover {
             background: #ffe0ec;
         }
@@ -246,11 +357,22 @@
         <button id="deleteObject">Zruš objekt</button>
         <button id="transformObject">Uprav objekt</button>
         <button id="addCostume">Pridaj kostým</button>
+        <div id="costumePreview"
+             style="position: absolute; display: none; top: 60px; left: 20px;
+            background: white; border: 2px solid #ccc; padding: 10px;
+            border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+            z-index: 200; max-width: 300px; overflow-x: auto; white-space: nowrap;">
+        </div>
+
         <button id="nextCostume">Ďalší kostým</button>
 
     </div>
     <div class="button-group">
-        <button id="configureProgram">Programuj</button>
+        <div id="programWrapper" style="position: relative;">
+            <button id="configureProgram">Programuj</button>
+            <div id="programDropdown" class="program-dropdown"></div>
+        </div>
+
         <button id="editText">Vlož text</button>
         <button id="saveProject">Zapiš projekt</button>
         <button id="downloadZip">Stiahni ako ZIP</button>
@@ -303,12 +425,28 @@
         <div id="block-library" ondragover="event.preventDefault()" style="display:none;">
             <!-- paste here all your block prototypes, exactly as in ziak.html: -->
             <div class="block" draggable="true" data-command="štart">Štart</div>
-            <div class="block" draggable="true" data-command="dopredu">Dopredu</div>
-            <div class="block" draggable="true" data-command="natoč">Natoč</div>
+            <div class="block" draggable="true" data-command="dopredu">
+                Dopredu <input type="number" value="10" class="block-param" />
+            </div>
+
+            <div class="block block-instance" data-command="opakuj" data-param="3" draggable="true">
+                Opakuj <input type="number" value="3" class="block-param" />
+                <div class="block-children"></div>
+            </div>
+
+
+            <div class="block" draggable="true" data-command="natoč">
+                Natoč <input type="number" value="90" class="block-param" />
+            </div>
+
             <div class="block" draggable="true" data-command="smerom">Smerom</div>
-            <div class="block" draggable="true" data-command="skoč na x,y">Skoč na X,Y</div>
+
             <div class="block" draggable="true" data-command="čakaj">Čakaj</div>
-            <div class="block" draggable="true" data-command="opakuj stále">Opakuj stále</div>
+            <div class="block block-instance" data-command="opakuj stále" draggable="true">
+                Opakuj stále
+                <div class="block-children"></div>
+            </div>
+
             <div class="block" draggable="true" data-command="zmeň kostým">Zmeň kostým</div>
             <!-- …etc… -->
         </div>
@@ -613,10 +751,14 @@
             runtimeControls.style.display = 'block';
             previewStop.style.display     = 'inline-block';
 
+            const freshBlocks = Array.from(programArea.children)
+                .filter(el => el.classList.contains('block-instance'))
+                .map(el => serializeBlock(el)); // reuse your existing serializeBlock function
+
             runBlocksOnObject(obj, () => {
-                // when finished, pretend they hit Zastav:
                 previewStop.onclick();
-            });
+            }, freshBlocks);
+
         };
 
 
@@ -631,18 +773,23 @@
         // 2) Build left palette from saved availableBlocks
         buildPalette(obj);
 // 3a) Only seed templates the first time we open this object
-        if (!programArea.querySelector('.block-instance')) {
-            obj.blocks.forEach(cmd => {
-                const prog = document.createElement('div');
-                prog.className       = 'block block-instance';
-                prog.textContent     = cmd.charAt(0).toUpperCase() + cmd.slice(1);
-                prog.dataset.command = cmd;
-                prog.draggable       = true;
-                prog.addEventListener('dragstart', onBlockDragStart);
-                prog.addEventListener('dragend',   onBlockDragEnd);
-                programArea.appendChild(prog);
-            });
-        }
+        // Render the saved block structure into the program area
+        programArea.innerHTML = "";
+        obj.blocks.forEach(blockData => {
+            const blockEl = renderBlock(blockData);
+            programArea.appendChild(blockEl);
+        });
+        enableNestedDrops(); // Activate drop zones inside 'opakuj'
+
+
+// After defining renderBlock(...)
+        programArea.innerHTML = "";
+        obj.blocks.forEach(blockData => {
+            const blockEl = renderBlock(blockData);
+            programArea.appendChild(blockEl);
+        });
+        enableNestedDrops();
+
 
         // 4) Hook the “Dielňa” button to show/hide the workshop
         dielnaBtn.onclick = () => {
@@ -654,11 +801,10 @@
 
         // 5) Hook the green ✔ to save both arrays and close
         exitEditorBtn.onclick = () => {
-            obj.blocks = Array.from(programArea.children)
-                .map(n => n.dataset.command);
-            saveProject();
+            persistBlockOrder(); // correctly serializes full nested structure
             blockEditor.style.display = 'none';
         };
+
 
     }
 
@@ -667,45 +813,96 @@
     // after
     let dragging = null;
     // ─── Stub out the “interpreter” ───
-    function executeCommands(obj, commands, onComplete) {
-        // store a simple index
+    function executeCommands(obj, blocks, onComplete) {
         let i = 0;
+        let stepCount = 0;
+        const MAX_STEPS = 200;
+
         function step() {
-            if (i === commands.length) {
-                if (onComplete) onComplete();
-                return;
+            if (i >= blocks.length || stepCount >= MAX_STEPS) {
+                if (stepCount >= MAX_STEPS) {
+                    alert("Program sa zastavil po dosiahnutí maximálneho počtu krokov.");
+                }
+                return onComplete && onComplete();
             }
-            const cmd = commands[i++];
-            switch (cmd) {
-                case 'dopredu':
-                    obj.x += 20;
+
+            const block = blocks[i++];
+            stepCount++;
+
+            switch (block.command) {
+
+                case 'opakuj':
+                    const times = parseInt(block.param || 1);
+                    const children = block.children || [];
+                    const expanded = [].concat(...Array(times).fill(children));
+                    blocks.splice(i, 0, ...expanded);
                     break;
+                case 'zmeň kostým':
+                    if (obj.costumes && obj.costumes.length > 0) {
+                        const currentIndex = obj.costumes.indexOf(obj.image);
+                        const nextIndex = (currentIndex + 1) % obj.costumes.length;
+                        obj.image = obj.costumes[nextIndex];
+                    }
+                    break;
+                case 'dopredu': {
+                    const steps = parseInt(block.param || 1); // interpret as steps
+                    const totalDistance = steps * 50;         // 1 step = 50px
+                    let moved = 0;
+                    const stepSize = 50;
+
+                    const angleRad = (obj.rotation || 0) * Math.PI / 180;
+
+                    const moveStep = () => {
+                        if (moved >= totalDistance) {
+                            setTimeout(step, 0); // continue to next command
+                            return;
+                        }
+
+                        const actualStep = Math.min(stepSize, totalDistance - moved);
+                        const dx = Math.cos(angleRad) * actualStep;
+                        const dy = Math.sin(angleRad) * actualStep;
+
+                        obj.x += dx;
+                        obj.y += dy;
+                        moved += actualStep;
+
+                        renderScene();
+                        setTimeout(moveStep, 300); // adjust for smooth animation
+                    };
+
+                    moveStep();
+                    return;
+                }
+
+
+
                 case 'natoč':
-                    obj.rotation += 30;
+                    obj.rotation += parseFloat(block.param || 90);
                     break;
+
                 case 'smerom':
-                    // example: jump right
                     obj.x += 50;
                     break;
-                case 'skoč na x,y':
-                    obj.x +=  0; obj.y -= 50;
-                    break;
+
                 case 'čakaj':
-                    // do nothing
                     break;
-                // …add more cases as you implement them…
-            }
+                case 'opakuj stále':
+                    i--; // repeat this command
+                    break;        }
+
             renderScene();
-            // schedule next step:
             setTimeout(step, 300);
         }
+
         step();
     }
 
-    function runBlocksOnObject(o, onComplete) {
-        // e.g. iterate through o.blocks with timeouts or animation...
-        executeCommands(o, o.blocks, onComplete);
+
+    function runBlocksOnObject(o, onComplete, liveBlocks = null) {
+        const blocksToRun = liveBlocks || o.blocks;
+        executeCommands(o, blocksToRun, onComplete);
     }
+
 
     function resetObject(o) {
         // your “zastav” logic for a single object
@@ -714,16 +911,7 @@
         renderScene();
     }
 
-    function handleDragStart(e) { dragging = e.target; }
-    // and after you do:
-    palette.addEventListener('dragover', e => e.preventDefault());
-    programArea.addEventListener('dragover', e => e.preventDefault());
-    // ─── Replace your programArea “drop” listener with this ───
-    // ─── 1) New dragstart: shove exactly one command into dataTransfer ───
-    function onBlockDragStart(e) {
-        e.dataTransfer.setData('text/plain', e.currentTarget.dataset.command);
-        e.dataTransfer.effectAllowed = 'move';
-    }
+
 
     // (Reattach to your palette blocks if needed)
     // document.querySelectorAll('#block-palette .block-instance')
@@ -734,43 +922,58 @@
     programArea.addEventListener('dragover', e => e.preventDefault());
     programArea.addEventListener('drop', e => {
         e.preventDefault();
+        if (!draggedBlock) return;
 
-        // 2a) read the single command
-        const cmd = e.dataTransfer.getData('text/plain');
-        if (!cmd) return;
-
-        // 2b) find the object we’re programming
         const obj = project.objects.find(o => o.id === selectedObjectId);
         if (!obj) return;
 
-        // 2c) remove exactly one from the teacher’s inventory
-        const idx = obj.availableBlocks.indexOf(cmd);
-        if (idx === -1) {
-            alert(`Nie je dostupný ďalší blok: ${cmd}`);
-            return;
+        const isNew = !draggedBlock.closest('#program-area') && !draggedBlock.closest('.block-children');
+
+        // If new block from palette or workshop
+        if (isNew) {
+            const cmd = draggedBlock.dataset.command;
+            const idx = obj.availableBlocks.indexOf(cmd);
+            if (idx === -1) {
+                alert(`Nie je dostupný ďalší blok: ${cmd}`);
+                return;
+            }
+            obj.availableBlocks.splice(idx, 1);
+            saveProject();
+            buildPalette(obj);
+
+            const newBlock = renderBlock({
+                command: draggedBlock.dataset.command,
+                param: draggedBlock.querySelector('input')?.value ?? null,
+
+                children: []
+            });
+
+            const after = getDragAfterElement(programArea, e.clientY);
+            if (!after) {
+                programArea.appendChild(newBlock);
+            } else {
+                programArea.insertBefore(newBlock, after);
+            }
+        } else {
+            // 🧠 Check if we're trying to drag an `opakuj` into its own child:
+            if (draggedBlock.contains(e.target)) return; // prevent illegal nesting
+
+            const after = getDragAfterElement(programArea, e.clientY);
+            if (!after) {
+                programArea.appendChild(draggedBlock);
+            } else {
+                programArea.insertBefore(draggedBlock, after);
+            }
         }
-        obj.availableBlocks.splice(idx, 1);
-        saveProject();
+        enableNestedDrops();
 
-        // 2d) rebuild the palette badges
-        buildPalette(obj);
-
-        // 2e) append one fresh block to the student’s program
-        const newBlock = document.createElement('div');
-        newBlock.className       = 'block block-instance';
-        newBlock.textContent     = cmd.charAt(0).toUpperCase() + cmd.slice(1);
-        newBlock.dataset.command = cmd;
-        newBlock.draggable       = true;
-        newBlock.addEventListener('dragstart', onBlockDragStart);
-        newBlock.addEventListener('dragend',   onBlockDragEnd);
-        programArea.appendChild(newBlock);
-
-        // 2f) persist and save
         persistBlockOrder();
-        saveProject();
+        draggedBlock = null;
     });
 
 
+
+    // 👇 Paste this right AFTER the existing programArea drop handler
 
 
     // remove a block from the student program on double‑click
@@ -874,10 +1077,16 @@
     document.getElementById('nextCostume').addEventListener('click', () => {
         if (!selectedObjectId) return alert("Najprv vyber objekt.");
         const obj = project.objects.find(o => o.id === selectedObjectId);
-        if (!obj.costumes || obj.costumes.length === 0) return;
-        const currentIndex = obj.costumes.indexOf(obj.image);
+        if (!obj || !Array.isArray(obj.costumes) || obj.costumes.length === 0) return;
+
+        let currentIndex = obj.costumes.indexOf(obj.image);
+
+        // If current image is not in costumes, treat it as first
+        if (currentIndex === -1) currentIndex = 0;
+
         const nextIndex = (currentIndex + 1) % obj.costumes.length;
         obj.image = obj.costumes[nextIndex];
+
         saveProject();
         renderScene();
     });
@@ -898,7 +1107,8 @@
                     rotation: 0,
                     scale: 1,
                     blocks: [],              // student’s pre‑written program
-                    availableBlocks: []      // teacher’s palette inventory
+                    availableBlocks: [],      // teacher’s palette inventory
+                    programmable: true   // ← ADD THIS LINE
                 };
 
                 project.objects.push(newObj);
@@ -923,10 +1133,10 @@
     document.getElementById('deleteObject').addEventListener('click', () => {
         if (!selectedObjectId) return alert("Vyberte objekt na zrušenie.");
 
-            project.objects = project.objects.filter(obj => obj.id !== selectedObjectId);
-            selectedObjectId = null;
-            saveProject();
-            renderScene();
+        project.objects = project.objects.filter(obj => obj.id !== selectedObjectId);
+        selectedObjectId = null;
+        saveProject();
+        renderScene();
     });
     function toggleProgrammable() {
         if (!selectedObjectId) return;
@@ -951,6 +1161,56 @@
             blockEditor.style.display = 'none';
         }
     });
+    const programDropdown = document.getElementById('programDropdown');
+
+    // Show dropdown on hover
+    configureBtn.addEventListener('mouseenter', () => {
+        if (!project?.objects?.length) return;
+
+        const programmable = project.objects.filter(o => o.programmable);
+        console.log("Programmable objects:", programmable);
+
+        if (programmable.length === 0) return;
+
+        programDropdown.innerHTML = ""; // clear old
+        programmable.forEach(obj => {
+            const div = document.createElement('div');
+            div.className = 'item';
+            div.innerHTML = `<img src="${obj.image}" alt="Objekt"><span>Objekt ${obj.id}</span>`;
+            div.onclick = () => {
+                selectedObjectId = obj.id;
+                openProgramEditorForObject(obj.id);
+                isConfiguringProgram = false;
+                configureBtn.classList.remove('active');
+                programDropdown.style.display = 'none';
+            };
+            programDropdown.appendChild(div);
+        });
+        programDropdown.style.display = 'block';
+    });
+
+    let dropdownTimeout;
+
+    configureBtn.addEventListener('mouseenter', () => {
+        clearTimeout(dropdownTimeout);
+        programDropdown.style.display = 'block';
+    });
+
+    configureBtn.addEventListener('mouseleave', () => {
+        dropdownTimeout = setTimeout(() => {
+            programDropdown.style.display = 'none';
+        }, 300);
+    });
+
+    programDropdown.addEventListener('mouseenter', () => {
+        clearTimeout(dropdownTimeout);
+        programDropdown.style.display = 'block';
+    });
+
+    programDropdown.addEventListener('mouseleave', () => {
+        programDropdown.style.display = 'none';
+    });
+
 
 
     document.getElementById('editText').addEventListener('click', () => {
@@ -1123,6 +1383,46 @@
 
         renderScene();
     });
+    const addCostumeBtn = document.getElementById('addCostume');
+    const costumePreview = document.getElementById('costumePreview');
+
+    addCostumeBtn.addEventListener('mouseenter', () => {
+        if (!selectedObjectId) return;
+        const obj = project.objects.find(o => o.id === selectedObjectId);
+        if (!obj) return;
+
+        costumePreview.innerHTML = "";
+
+        const allCostumes = [obj.image].concat(obj.costumes || []);
+        allCostumes.forEach((imgSrc, index) => {
+            const img = document.createElement('img');
+            img.src = imgSrc;
+            img.alt = `Kostým ${index + 1}`;
+            img.style.cssText = `
+            height: 60px;
+            margin-right: 6px;
+            border-radius: 8px;
+            border: 2px solid #ccc;
+        `;
+            costumePreview.appendChild(img);
+        });
+
+        const rect = addCostumeBtn.getBoundingClientRect();
+        costumePreview.style.top = `${rect.bottom + 5}px`;
+        costumePreview.style.left = `${rect.left}px`;
+        costumePreview.style.display = "block";
+    });
+
+    addCostumeBtn.addEventListener('mouseleave', () => {
+        setTimeout(() => costumePreview.style.display = "none", 400);
+    });
+    costumePreview.addEventListener('mouseenter', () => {
+        costumePreview.style.display = "block";
+    });
+    costumePreview.addEventListener('mouseleave', () => {
+        costumePreview.style.display = "none";
+    });
+
     let draggedBlock = null;
 
     // Called on dragstart
@@ -1130,6 +1430,7 @@
         draggedBlock = e.currentTarget;
         e.currentTarget.classList.add('dragging');
         e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', e.currentTarget.dataset.command);
     }
 
     function onBlockDragEnd(e) {
@@ -1152,22 +1453,134 @@
     }
 
     // After you finish a drop, rewrite obj.blocks from the DOM order
+    function serializeBlock(blockEl) {
+        const command = blockEl.dataset.command;
+        const paramInput = blockEl.querySelector('input');
+        const param = paramInput ? paramInput.value : null;
+
+        const blockData = { command };
+        if (param !== null) blockData.param = param;
+
+        const childrenContainer = blockEl.querySelector('.block-children');
+        if (childrenContainer) {
+            const children = Array.from(childrenContainer.children)
+                .filter(el => el.classList.contains('block-instance'))
+                .map(childEl => serializeBlock(childEl));
+            blockData.children = children;
+        }
+
+        return blockData;
+    }
+
     function persistBlockOrder() {
         if (!selectedObjectId) return;
         const obj = project.objects.find(o => o.id === selectedObjectId);
-        obj.blocks = Array.from(programArea.querySelectorAll('.block-instance'))
-            .map(n => n.dataset.command);
+
+        obj.blocks = Array.from(programArea.children)
+            .filter(el => el.classList.contains('block-instance'))
+            .map(blockEl => serializeBlock(blockEl));
+
         saveProject();
     }
-    // 3) Only allow reordering inside the program area:
-    programArea.addEventListener('dragover', e => {
-        e.preventDefault();
-        const after = getDragAfterElement(programArea, e.clientY);
-        if (draggedBlock) {
-            if (!after) programArea.appendChild(draggedBlock);
-            else        programArea.insertBefore(draggedBlock, after);
+
+    function renderBlock(blockData) {
+        const block = document.createElement('div');
+        block.className = 'block block-instance';
+        block.dataset.command = blockData.command;
+        block.draggable = true;
+        block.addEventListener('dragstart', onBlockDragStart);
+        block.addEventListener('dragend', onBlockDragEnd);
+
+        const template = document.querySelector(`#block-library .block[data-command="${blockData.command}"]`);
+        if (template) {
+            block.innerHTML = template.innerHTML;
+        } else {
+            block.textContent = blockData.command;
         }
-    });
+// If opakuj stále doesn't have .block-children yet, add it
+        if (blockData.command === "opakuj stále" && !block.querySelector('.block-children')) {
+            const childDiv = document.createElement('div');
+            childDiv.className = 'block-children';
+            block.appendChild(childDiv);
+        }
+
+        // If it has a parameter, set it
+        const paramInput = block.querySelector('input');
+        if (paramInput && blockData.param !== undefined) {
+            paramInput.value = blockData.param;
+        }
+
+        // If it has children, recursively render them
+        const childContainer = block.querySelector('.block-children');
+        if (childContainer && Array.isArray(blockData.children)) {
+            blockData.children.forEach(child => {
+                const childBlock = renderBlock(child);
+                childContainer.appendChild(childBlock);
+            });
+        }
+
+        return block;
+    }
+    function enableNestedDrops() {
+        document.querySelectorAll('.block-children').forEach(childContainer => {
+            childContainer.addEventListener('dragover', e => e.preventDefault());
+
+            childContainer.addEventListener('drop', e => {
+                e.preventDefault();
+                e.stopPropagation();
+
+                if (!draggedBlock) return;
+
+                const obj = project.objects.find(o => o.id === selectedObjectId);
+                if (!obj) return;
+
+                const isNew = !programArea.contains(draggedBlock) && !draggedBlock.closest('.block-children');
+
+                if (isNew) {
+                    const cmd = draggedBlock.dataset.command;
+                    const idx = obj.availableBlocks.indexOf(cmd);
+                    if (idx === -1) {
+                        alert(`Nie je dostupný ďalší blok: ${cmd}`);
+                        return;
+                    }
+                    obj.availableBlocks.splice(idx, 1);
+                    saveProject();
+                    buildPalette(obj);
+
+                    const newBlock = renderBlock({
+                        command: draggedBlock.dataset.command,
+                        param: draggedBlock.querySelector('input')?.value ?? null,
+
+                        children: []
+                    });
+
+                    const after = getDragAfterElement(childContainer, e.clientY);
+                    if (!after) {
+                        childContainer.appendChild(newBlock);
+                    } else {
+                        childContainer.insertBefore(newBlock, after);
+                    }
+                } else {
+                    // 🧠 Prevent dragging parent into its own child
+                    if (draggedBlock.contains(childContainer)) return;
+
+                    const after = getDragAfterElement(childContainer, e.clientY);
+                    if (!after) {
+                        childContainer.appendChild(draggedBlock);
+                    } else {
+                        childContainer.insertBefore(draggedBlock, after);
+                    }
+                }
+                enableNestedDrops();
+
+                persistBlockOrder();
+                draggedBlock = null;
+            });
+        });
+    }
+
+
+
 
 
 </script>
